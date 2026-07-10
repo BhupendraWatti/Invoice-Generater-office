@@ -18,7 +18,7 @@ async function main() {
   const userAlex = await prisma.user.create({
     data: {
       email: 'alex@docflow.studio',
-      passwordHash: '$2b$10$abcdefghijklmnopqrstuvwxyz1234567890', // mock hash
+      passwordHash: '$2b$10$f2PmsJn/kbuMR2OEkB89keEUJP0Rz9gfrWaHADNjkcGgq3/FWuV3W', // password: admin123
       firstName: 'Alex',
       lastName: 'Carter',
       role: UserRole.ADMIN,
@@ -29,7 +29,7 @@ async function main() {
   const userSarah = await prisma.user.create({
     data: {
       email: 'sarah.j@docflow.studio',
-      passwordHash: '$2b$10$abcdefghijklmnopqrstuvwxyz1234567890',
+      passwordHash: '$2b$10$f2PmsJn/kbuMR2OEkB89keEUJP0Rz9gfrWaHADNjkcGgq3/FWuV3W', // password: admin123
       firstName: 'Sarah',
       lastName: 'Jenkins',
       role: UserRole.MANAGER,
@@ -39,7 +39,7 @@ async function main() {
   const userMike = await prisma.user.create({
     data: {
       email: 'mike.t@docflow.studio',
-      passwordHash: '$2b$10$abcdefghijklmnopqrstuvwxyz1234567890',
+      passwordHash: '$2b$10$f2PmsJn/kbuMR2OEkB89keEUJP0Rz9gfrWaHADNjkcGgq3/FWuV3W', // password: admin123
       firstName: 'Mike',
       lastName: 'Taylor',
       role: UserRole.USER,

@@ -1,21 +1,33 @@
 'use client';
 
 import { useState } from 'react';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
     }
-    // Auth logic will go here
+    
+    setLoading(true);
     setError('');
+    try {
+      await login(email, password);
+    } catch (err: any) {
+      setError(err.message || 'Invalid credentials or connection error.');
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   return (
     <div className="flex items-center justify-center h-full bg-background p-4">
@@ -65,9 +77,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-primary text-on-primary font-medium py-2 rounded hover:bg-primary-fixed-variant transition-colors text-body-sm mt-2"
+            disabled={loading}
+            className="w-full bg-primary text-on-primary font-medium py-2 rounded hover:bg-primary-fixed-variant transition-colors text-body-sm mt-2 disabled:bg-primary/50 cursor-pointer disabled:cursor-not-allowed"
           >
-            Continue
+            {loading ? 'Verifying...' : 'Continue'}
           </button>
         </form>
       </div>

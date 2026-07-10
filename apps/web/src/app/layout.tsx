@@ -1,5 +1,6 @@
 import '../styles/globals.css';
 import { Metadata } from 'next';
+import { AuthProvider } from '../hooks/useAuth';
 
 export const metadata: Metadata = {
   title: 'DocFlow Workspace Studio',
@@ -15,13 +16,16 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined"
           rel="stylesheet"
         />
       </head>
       <body className="font-sans antialiased text-on-background bg-background h-screen overflow-hidden">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
 }
+

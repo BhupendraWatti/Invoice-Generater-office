@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
+import { AuditService } from '../audit/audit.service';
 import * as bcrypt from 'bcrypt';
 import { AuthResponseDto } from '@docflow/shared-types';
 
@@ -9,6 +10,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly auditService: AuditService,
   ) {}
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -20,13 +22,15 @@ export class AuthService {
     return null;
   }
 
-  async login(email: string, pass: string): Promise<AuthResponseDto> {
+  async login(email: string, pass: string, ip?: string, ua?: string): Promise<AuthResponseDto> {
     const user = await this.validateUser(email, pass);
     if (!user) {
+      await this.auditService.logAction(null, 'LOGIN_FAILED', `Failed login attempt for ${email}`, ip, ua);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     if (user.mfaEnabled) {
+      await this.auditService.logAction(user.id, 'MFA_CHALLENGE', `MFA challenge prompted for ${email}`, ip, ua);
       const mfaToken = this.jwtService.sign(
         { sub: user.id, email: user.email, isPendingMfa: true },
         { expiresIn: '5m' },
@@ -37,6 +41,7 @@ export class AuthService {
       };
     }
 
+    await this.auditService.logAction(user.id, 'LOGIN_SUCCESS', `User ${email} successfully logged in`, ip, ua);
     const payload = { email: user.email, sub: user.id };
     const token = this.jwtService.sign(payload);
     return {
