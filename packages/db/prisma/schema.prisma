@@ -1,0 +1,181 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  USER
+  AUDITOR
+}
+
+enum DocumentType {
+  PDF
+  DOCX
+  ZIP
+  PROPOSAL
+  INVOICE
+  SPREADSHEET
+}
+
+enum DocumentStatus {
+  DRAFT
+  REVIEW
+  COMPLETED
+  ARCHIVED
+}
+
+enum ActivityType {
+  EDIT
+  COMMENT
+  APPROVE
+  REJECT
+  SYSTEM
+}
+
+enum RenewalType {
+  SOFTWARE
+  LEASE
+  INSURANCE
+  CONTRACT
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         UserRole   @default(USER)
+  mfaEnabled   Boolean    @default(false)
+  mfaSecret    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  documents    Document[] @relation("DocumentAuthor")
+  activities   Activity[]
+  comments     Comment[]
+
+  @@map("users")
+}
+
+model Company {
+  id                 String     @id @default(uuid())
+  name               String
+  registrationNumber String?
+  taxId              String?
+  addressLine1       String
+  addressLine2       String?
+  city               String
+  postalCode         String
+  country            String
+  bankName           String?
+  bankIban           String?
+  bankBic            String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  documents          Document[]
+  customers          Customer[]
+
+  @@map("companies")
+}
+
+model Customer {
+  id           String     @id @default(uuid())
+  companyId    String
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name         String
+  email        String
+  phone        String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  postalCode   String?
+  country      String?
+  status       String     @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  documents    Document[]
+
+  @@map("customers")
+}
+
+model Document {
+  id         String         @id @default(uuid())
+  title      String
+  type       DocumentType
+  status     DocumentStatus @default(DRAFT)
+  fileUrl    String?
+  companyId  String?
+  company    Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  customerId String?
+  customer   Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  authorId   String
+  author     User           @relation("DocumentAuthor", fields: [authorId], references: [id])
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  blocks     DocumentBlock[]
+  activities Activity[]
+  comments   Comment[]
+  renewals   Renewal[]
+
+  @@map("documents")
+}
+
+model DocumentBlock {
+  id         String   @id @default(uuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  sortOrder  Int      @default(0)
+  blockType  String   // e.g., "COVER", "TEXT", "TABLE", "NOTES"
+  content    String   @db.Text // JSON string representing properties specific to this block
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("document_blocks")
+}
+
+model Activity {
+  id         String       @id @default(uuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actionType ActivityType
+  documentId String?
+  document   Document?    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  details    String       @db.VarChar(1000)
+  createdAt  DateTime     @default(now())
+
+  @@map("activities")
+}
+
+model Renewal {
+  id          String      @id @default(uuid())
+  documentId  String?
+  document    Document?   @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  itemName    String
+  renewalType RenewalType
+  renewalDate DateTime
+  amount      Decimal     @db.Decimal(10, 2)
+  status      String      @default("PENDING") // PENDING, COMPLETED
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("renewals")
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text       String   @db.VarChar(1000)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("comments")
+}
