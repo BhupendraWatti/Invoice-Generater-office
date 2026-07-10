@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: docflow_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_12345
+      MYSQL_DATABASE: docflow_db
+      MYSQL_USER: docflow_user
+      MYSQL_PASSWORD: docflow_password_12345
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
