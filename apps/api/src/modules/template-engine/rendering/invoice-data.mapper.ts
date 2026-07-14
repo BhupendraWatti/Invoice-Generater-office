@@ -1,5 +1,16 @@
 import { InvoiceData, InvoiceLineItem, InvoiceParty } from '@docflow/shared-types';
 
+function safeDate(val: any): string | undefined {
+  if (!val) return undefined;
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return undefined;
+    return d.toISOString().split('T')[0];
+  } catch {
+    return undefined;
+  }
+}
+
 export function mapDocumentToInvoiceData(doc: any): InvoiceData {
   let items: InvoiceLineItem[] = [];
   let subtotal = 0;
@@ -49,6 +60,7 @@ export function mapDocumentToInvoiceData(doc: any): InvoiceData {
             taxRate,
             taxAmount,
             amount: lineVal,
+            customFields: item.customFields || {},
           });
 
           subtotal += lineVal;
@@ -83,12 +95,19 @@ export function mapDocumentToInvoiceData(doc: any): InvoiceData {
     return lines;
   };
 
+  const primaryContact = doc.company?.contacts?.find((c: any) => c.isDefault) || doc.company?.contacts?.[0];
+  const companyEmail = doc.company?.email || primaryContact?.email || undefined;
+  const companyPhone = doc.company?.phone || primaryContact?.phone || undefined;
+
   const orgParty: InvoiceParty = {
     name: doc.company?.name || 'Unlinked Corporate Entity',
     lines: doc.company ? formatAddress(doc.company) : [],
     taxId: doc.company?.taxId || undefined,
-    email: doc.company?.email || undefined,
-    phone: doc.company?.phone || undefined,
+    email: companyEmail,
+    phone: companyPhone,
+    website: doc.company?.customFields?.website || doc.company?.customFields?.Website || undefined,
+    cin: doc.company?.registrationNumber || doc.company?.customFields?.cin || doc.company?.customFields?.CIN || undefined,
+    pan: doc.company?.customFields?.pan || doc.company?.customFields?.PAN || undefined,
   };
 
   const clientParty: InvoiceParty = {
@@ -145,8 +164,8 @@ export function mapDocumentToInvoiceData(doc: any): InvoiceData {
     documentNumber: doc.title,
     title: doc.title,
     status: doc.status,
-    issueDate: new Date(doc.createdAt).toISOString().split('T')[0],
-    dueDate: doc.dueDate ? new Date(doc.dueDate).toISOString().split('T')[0] : undefined,
+    issueDate: safeDate(doc.createdAt) || new Date().toISOString().split('T')[0],
+    dueDate: safeDate(doc.dueDate),
     currencySymbol,
     organization: orgParty,
     billTo: clientParty,

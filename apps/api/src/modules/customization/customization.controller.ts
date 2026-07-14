@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, HttpException } from '@nestjs/common';
 import { CustomizationService } from './customization.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -58,6 +58,14 @@ export class CustomizationController {
 
   @Put('branding/:companyId')
   async updateBranding(@Param('companyId') companyId: string, @Body() body: any) {
-    return this.customizationService.updateBranding(companyId, body);
+    try {
+      return await this.customizationService.updateBranding(companyId, body);
+    } catch (err: any) {
+      console.error(`Branding update failed for company ${companyId}:`, err);
+      throw new HttpException(
+        { message: err?.message || 'Branding update failed', detail: err?.stack || '' },
+        500
+      );
+    }
   }
 }

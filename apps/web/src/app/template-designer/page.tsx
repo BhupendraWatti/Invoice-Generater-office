@@ -111,9 +111,9 @@ export default function TemplateDesignerListPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 select-none">
-              {definitions.map((def) => (
+              {definitions.map((def, idx) => (
                 <div
-                  key={def.meta.id}
+                  key={def.meta?.id || `tmpl-${idx}`}
                   className="bg-surface border border-outline-variant rounded-xl overflow-hidden hover:shadow-md transition-shadow flex flex-col h-[260px] group relative"
                 >
                   {/* Decorative Header Canvas mockup */}
@@ -139,21 +139,21 @@ export default function TemplateDesignerListPage() {
                   {/* Body Metadata details */}
                   <div className="p-4 border-t border-outline-variant bg-surface flex justify-between items-center">
                     <div>
-                      <h3 className="font-headline-sm text-[13px] font-bold text-on-surface truncate max-w-[180px]">{def.meta.name}</h3>
+                      <h3 className="font-headline-sm text-[13px] font-bold text-on-surface truncate max-w-[180px]">{def.meta?.name || 'Unnamed Template'}</h3>
                       <p className="text-[10px] text-on-surface-variant mt-0.5 font-mono">
-                        {def.meta.extends ? `Extends: ${def.meta.extends}` : 'Base Blueprint'}
+                        {def.meta?.extends ? `Extends: ${def.meta.extends}` : 'Base Blueprint'}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-1.5">
                       <Link
-                        href={`/template-designer/${def.meta.id}`}
+                        href={`/template-designer/${def.meta?.id || ''}`}
                         className="h-7 px-3 bg-primary/5 hover:bg-primary/10 text-primary font-bold text-[11px] rounded flex items-center justify-center transition-colors"
                       >
                         Design
                       </Link>
                       <button
-                        onClick={() => handleDelete(def.meta.id)}
+                        onClick={() => handleDelete(def.meta?.id || '')}
                         className="w-7 h-7 rounded hover:bg-error-container/20 text-on-surface-variant hover:text-error transition-colors flex items-center justify-center"
                         title="Delete Template Layout"
                       >

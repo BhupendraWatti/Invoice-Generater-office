@@ -172,7 +172,7 @@ export class TemplateEngineService implements OnModuleInit {
 
     // 2. Resolve template configuration layout
     const definitions = await this.listDefinitions();
-    const target = definitions.find(d => d.meta.id === templateId) || BASE_TEMPLATE;
+    const target = definitions.find(d => d.meta?.id === templateId) || BASE_TEMPLATE;
     const resolvedTemplate = resolveTemplate(target, () => definitions);
 
     if (doc.accentColor) {
@@ -211,7 +211,7 @@ export class TemplateEngineService implements OnModuleInit {
       ext = 'pdf';
     }
 
-    const filename = `${doc.title.replace(/\s+/g, '_')}_invoice.${ext}`;
+    const filename = `${(doc.title || 'invoice').replace(/\s+/g, '_')}_invoice.${ext}`;
 
     return {
       success: true,

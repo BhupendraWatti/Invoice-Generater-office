@@ -130,3 +130,44 @@ aside {
   box-shadow: none !important;
 }
 
+/* Custom Range Input Styling for highly visible tracks and thumbs */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+}
+/* Webkit (Chrome, Safari, Edge) */
+input[type="range"]::-webkit-slider-runnable-track {
+  background: #dbdad7 !important; /* solid visible border gray */
+  height: 4px;
+  border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6px; /* center the thumb vertically */
+  background-color: #00acc1 !important; /* Teal */
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+/* Firefox */
+input[type="range"]::-moz-range-track {
+  background: #dbdad7 !important;
+  height: 4px;
+  border-radius: 2px;
+}
+input[type="range"]::-moz-range-thumb {
+  background-color: #00acc1 !important;
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+

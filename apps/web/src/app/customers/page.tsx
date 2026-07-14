@@ -7,6 +7,7 @@ import { api } from '../../lib/api';
 import { CustomerDto, CompanyDto, DocumentDto, AddressDto, ContactDto, BankAccountDto } from '@docflow/shared-types';
 import * as Dialog from '@radix-ui/react-dialog';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface CustomFieldEntry {
   key: string;
@@ -19,6 +20,15 @@ export default function CustomersPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomerDetail, setSelectedCustomerDetail] = useState<any>(null);
   const [linkedDocuments, setLinkedDocuments] = useState<DocumentDto[]>([]);
+  
+  // Contextual Document creation states
+  const [createDocOpen, setCreateDocOpen] = useState(false);
+  const [createTitle, setCreateTitle] = useState('');
+  const [createType, setCreateType] = useState('INVOICE');
+  const [createCompanyId, setCreateCompanyId] = useState('');
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const router = useRouter();
   
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -236,6 +246,46 @@ export default function CustomersPage() {
     }
   };
 
+  // Sync contextual document creation defaults
+  useEffect(() => {
+    if (createDocOpen && selectedCustomerDetail) {
+      setCreateTitle('');
+      setCreateType('INVOICE');
+      setCreateError('');
+      if (selectedCustomerDetail.companyId) {
+        setCreateCompanyId(selectedCustomerDetail.companyId);
+      } else if (companies.length > 0) {
+        setCreateCompanyId(companies[0].id);
+      }
+    }
+  }, [createDocOpen, selectedCustomerDetail, companies]);
+
+  const handleCreateDocForCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createTitle.trim()) {
+      setCreateError('Please provide a document title.');
+      return;
+    }
+    if (!selectedCustomerId) return;
+
+    setCreateLoading(true);
+    setCreateError('');
+    try {
+      const doc = await api.documents.create({
+        title: createTitle,
+        type: createType,
+        companyId: createCompanyId || undefined,
+        customerId: selectedCustomerId,
+      });
+      setCreateDocOpen(false);
+      router.push(`/documents/${doc.id}/edit`);
+    } catch (err: any) {
+      setCreateError(err.message || 'Failed to create document.');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to remove this client? This will unlink associated document history.')) return;
     try {
@@ -344,17 +394,24 @@ export default function CustomersPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex gap-1 select-none">
+                <div className="flex gap-1.5 select-none">
+                  <button
+                    onClick={() => setCreateDocOpen(true)}
+                    className="bg-primary text-on-primary hover:bg-primary-fixed-variant font-semibold text-label-md px-3.5 py-1.5 rounded flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">note_add</span>
+                    Create Document
+                  </button>
                   <button
                     onClick={() => handleOpenEdit(selectedCustomerDetail)}
-                    className="bg-surface border border-outline-variant hover:bg-surface-container-low font-semibold text-label-md px-3.5 py-1.5 rounded flex items-center gap-1.5 transition-colors"
+                    className="bg-surface border border-outline-variant hover:bg-surface-container-low font-semibold text-label-md px-3.5 py-1.5 rounded flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-[16px]">edit</span>
                     Modify Client
                   </button>
                   <button
                     onClick={() => handleDelete(selectedCustomerDetail.id)}
-                    className="bg-error-container text-on-error-container hover:bg-error-container/80 font-semibold text-label-md px-3.5 py-1.5 rounded flex items-center gap-1.5 transition-colors"
+                    className="bg-error-container text-on-error-container hover:bg-error-container/80 font-semibold text-label-md px-3.5 py-1.5 rounded flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-[16px]">delete</span>
                     Remove
@@ -867,6 +924,85 @@ export default function CustomersPage() {
                 className="w-full bg-primary text-on-primary font-bold py-2.5 rounded hover:bg-primary-fixed-variant transition-colors text-body-sm mt-4 disabled:bg-primary/50 shadow-sm active:scale-95 transition-transform"
               >
                 {formLoading ? 'Saving client registry...' : isEditing ? 'Update Client Profile' : 'Onboard Client'}
+              </button>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      {/* Floating command card document creation */}
+      <Dialog.Root open={createDocOpen} onOpenChange={setCreateDocOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-inverse-on-surface/40 backdrop-blur-sm z-50 transition-opacity" />
+          <Dialog.Content 
+            className="fixed top-[25%] left-1/2 -translate-x-1/2 w-full max-w-sm bg-surface border border-outline-variant rounded-xl shadow-xl z-50 p-5 flex flex-col gap-4 animate-scale-up"
+          >
+            <div className="flex justify-between items-center pb-2 border-b border-outline-variant">
+              <div className="flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-primary text-[18px]">note_add</span>
+                <Dialog.Title className="font-semibold text-body-sm text-on-surface">
+                  Create Document
+                </Dialog.Title>
+              </div>
+              <Dialog.Close className="text-on-surface-variant hover:text-error transition-colors p-1 rounded hover:bg-surface-container flex items-center justify-center">
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </Dialog.Close>
+            </div>
+
+            {createError && (
+              <div className="bg-error-container text-on-error-container text-[11px] p-2.5 rounded border border-error/20 font-semibold">
+                {createError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateDocForCustomer} className="flex flex-col gap-3.5 text-body-sm">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-on-surface-variant font-bold uppercase">Document Title</label>
+                <input
+                  type="text"
+                  value={createTitle}
+                  onChange={(e) => setCreateTitle(e.target.value)}
+                  placeholder="e.g. Q4 Consulting Invoice"
+                  className="px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none focus:ring-1 focus:ring-primary text-body-sm font-semibold"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-on-surface-variant font-bold uppercase">Document Type</label>
+                <select
+                  value={createType}
+                  onChange={(e) => setCreateType(e.target.value)}
+                  className="px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none focus:ring-1 focus:ring-primary text-body-sm text-on-surface font-semibold"
+                >
+                  <option value="INVOICE">Invoice (Financial Calculator)</option>
+                  <option value="PROPOSAL">Proposal (Interactive Editor)</option>
+                  <option value="QUOTATION">Quotation (Pricing Estimate)</option>
+                  <option value="AGREEMENT">Agreement / Contract</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-on-surface-variant font-bold uppercase">Linked Corporate Entity</label>
+                <select
+                  value={createCompanyId}
+                  onChange={(e) => setCreateCompanyId(e.target.value)}
+                  className="px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none focus:ring-1 focus:ring-primary text-body-sm text-on-surface font-semibold"
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={createLoading}
+                className="bg-primary hover:bg-primary-fixed-variant text-on-primary transition-colors font-semibold py-2 rounded text-body-sm mt-1 disabled:opacity-50 active:scale-[0.98] cursor-pointer"
+              >
+                {createLoading ? 'Creating document...' : 'Create & Open Editor'}
               </button>
             </form>
           </Dialog.Content>

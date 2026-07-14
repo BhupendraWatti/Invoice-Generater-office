@@ -42,12 +42,16 @@ export class CompaniesService {
   async create(dto: CreateCompanyDto) {
     const { addresses, contacts, bankAccounts, ...companyData } = dto as any;
 
+    const cleanAddresses = cleanRelationalData(addresses);
+    const cleanContacts = cleanRelationalData(contacts);
+    const cleanBankAccounts = cleanRelationalData(bankAccounts);
+
     return this.prisma.company.create({
       data: {
         ...companyData,
-        addresses: addresses && addresses.length > 0 ? { create: addresses } : undefined,
-        contacts: contacts && contacts.length > 0 ? { create: contacts } : undefined,
-        bankAccounts: bankAccounts && bankAccounts.length > 0 ? { create: bankAccounts } : undefined,
+        addresses: cleanAddresses && cleanAddresses.length > 0 ? { create: cleanAddresses } : undefined,
+        contacts: cleanContacts && cleanContacts.length > 0 ? { create: cleanContacts } : undefined,
+        bankAccounts: cleanBankAccounts && cleanBankAccounts.length > 0 ? { create: cleanBankAccounts } : undefined,
       },
       include: {
         addresses: true,
@@ -60,6 +64,10 @@ export class CompaniesService {
   async update(id: string, dto: Partial<CreateCompanyDto>) {
     await this.findOne(id); // Ensure company exists
     const { addresses, contacts, bankAccounts, ...companyData } = dto as any;
+
+    const cleanAddresses = cleanRelationalData(addresses);
+    const cleanContacts = cleanRelationalData(contacts);
+    const cleanBankAccounts = cleanRelationalData(bankAccounts);
 
     // Delete existing relations and insert new ones atomically
     return this.prisma.$transaction(async (tx) => {
@@ -77,9 +85,9 @@ export class CompaniesService {
         where: { id },
         data: {
           ...companyData,
-          addresses: addresses && addresses.length > 0 ? { create: addresses } : undefined,
-          contacts: contacts && contacts.length > 0 ? { create: contacts } : undefined,
-          bankAccounts: bankAccounts && bankAccounts.length > 0 ? { create: bankAccounts } : undefined,
+          addresses: cleanAddresses && cleanAddresses.length > 0 ? { create: cleanAddresses } : undefined,
+          contacts: cleanContacts && cleanContacts.length > 0 ? { create: cleanContacts } : undefined,
+          bankAccounts: cleanBankAccounts && cleanBankAccounts.length > 0 ? { create: cleanBankAccounts } : undefined,
         },
         include: {
           addresses: true,
@@ -96,4 +104,9 @@ export class CompaniesService {
       where: { id },
     });
   }
+}
+
+function cleanRelationalData(items: any[] | undefined) {
+  if (!items) return undefined;
+  return items.map(({ id, companyId, customerId, createdAt, updatedAt, ...rest }) => rest);
 }

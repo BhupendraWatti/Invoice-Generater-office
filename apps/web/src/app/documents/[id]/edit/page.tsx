@@ -103,6 +103,39 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
     showFooter: true
   });
 
+  // Right sidebar resizing states
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(320);
+  const isResizingRight = useRef(false);
+
+  const startResizingRight = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizingRight.current = true;
+    document.addEventListener('mousemove', handleMouseMoveRight);
+    document.addEventListener('mouseup', stopResizingRight);
+  };
+
+  const handleMouseMoveRight = (e: MouseEvent) => {
+    if (!isResizingRight.current) return;
+    const newWidth = window.innerWidth - e.clientX;
+    if (newWidth >= 280 && newWidth <= 600) {
+      setRightSidebarWidth(newWidth);
+    }
+  };
+
+  const stopResizingRight = () => {
+    isResizingRight.current = false;
+    document.removeEventListener('mousemove', handleMouseMoveRight);
+    document.removeEventListener('mouseup', stopResizingRight);
+  };
+
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMoveRight);
+      document.removeEventListener('mouseup', stopResizingRight);
+    };
+  }, []);
+
+
   const handleSelectBlock = (blockId: string) => {
     setSelectedBlockId(blockId);
     setActiveRightTab('properties');
@@ -166,9 +199,19 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           content: typeof b.content === 'string' ? JSON.parse(b.content) : b.content
         }));
         const configBlock = mapped.find(b => b.content?.isGlobalConfig);
+        let restoredVisibility = configBlock?.content?.fieldVisibility || null;
         if (configBlock) {
           if (configBlock.content.pageSettings) setPageSettings(configBlock.content.pageSettings);
-          if (configBlock.content.fieldVisibility) setFieldVisibility(configBlock.content.fieldVisibility);
+          if (restoredVisibility) setFieldVisibility(restoredVisibility);
+        }
+        // If no logo in draft config, auto-load from company branding
+        if (docData.companyId && (!restoredVisibility?.logoUrl)) {
+          try {
+            const branding = await api.customization.getBranding(docData.companyId);
+            if (branding?.logoUrl) {
+              setFieldVisibility(prev => ({ ...prev, logoUrl: branding.logoUrl || '' }));
+            }
+          } catch {}
         }
         setBlocks(mapped.filter(b => !b.content?.isGlobalConfig));
       } else {
@@ -588,34 +631,49 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
             display: none !important;
           }
           
-          main {
+          /* Reset root and containers */
+          html, body {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          
+          /* Break out of flex/grid layouts only for top-level parent wrapper elements */
+          main, 
+          body > div, 
+          main > div {
+            display: block !important;
+            position: relative !important;
             padding: 0 !important;
             margin: 0 !important;
+            height: auto !important;
+            width: auto !important;
             overflow: visible !important;
+            box-shadow: none !important;
+          }
+          
+          main {
             width: 100% !important;
           }
           
-          body * {
-            visibility: hidden;
-          }
-          
-          #print-sheet, #print-sheet * {
-            visibility: visible;
-          }
-          
           #print-sheet {
-            position: absolute;
-            left: 0;
-            top: 0;
+            display: block !important;
+            position: relative !important;
+            margin: 0 !important;
             width: 100% !important;
             min-width: 100% !important;
             max-width: 100% !important;
             border: none !important;
             box-shadow: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
             background: white !important;
             color: black !important;
+            min-height: 0 !important;
+            height: auto !important;
+            page-break-inside: avoid !important;
           }
           
           #print-sheet input, 
@@ -634,6 +692,11 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           #print-sheet table select {
             appearance: none !important;
             background-image: none !important;
+          }
+
+          @page {
+            size: auto;
+            margin: 0mm;
           }
         }
       `}</style>
@@ -848,11 +911,14 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
         {/* ======================================================== */}
         {/* CENTER PANE: EDITABLE DOCUMENT CANVAS */}
         {/* ======================================================== */}
-        <main className="flex-1 overflow-y-auto p-8 h-full custom-scrollbar pr-[374px]">
+        <main 
+          style={{ paddingRight: `${rightSidebarWidth + 24}px` }}
+          className="flex-1 overflow-y-auto p-8 h-full custom-scrollbar"
+        >
           <div className="max-w-[1400px] mx-auto flex flex-col gap-6 pb-24">
             
             {/* Action title toolbar */}
-            <div className="flex justify-between items-center border-b border-outline-variant/60 pb-3 select-none">
+            <div className="flex justify-between items-center border-b border-outline-variant/60 pb-3 select-none no-print">
               <div className="flex-1 min-w-0 pr-6">
                 <input 
                   type="text" 
@@ -912,23 +978,24 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                 </div>
               )}
 
-              {/* 1. ORGANIZATION BRANDING BLOCK (Virtual) */}
+              {/* Redesigned Document Header block container */}
               <div 
-                onClick={() => setSelectedBlockId('org-branding')}
-                className={`flex justify-between items-start gap-4 mb-6 z-10 border-b pb-4 cursor-pointer hover:ring-1 hover:ring-primary/45 rounded p-2 transition-all relative group/block
-                  ${selectedBlockId === 'org-branding' ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-outline-variant/40'}`}
+                onClick={() => setSelectedBlockId('document-header')}
+                className={`grid grid-cols-2 gap-8 mb-8 z-10 border-b pb-4 cursor-pointer hover:ring-1 hover:ring-primary/45 rounded p-3 transition-all relative group/block
+                  ${selectedBlockId === 'document-header' ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-outline-variant/40'}`}
               >
                 {/* Floating badge controls */}
                 <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
                   <span className="bg-primary text-on-primary text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[10px]">edit</span> Edit Org Branding
+                    <span className="material-symbols-outlined text-[10px]">edit</span> Edit Header Details
                   </span>
                 </div>
 
-                <div>
+                {/* Left Column: Logo + Bill To */}
+                <div className="space-y-6">
                   {/* Logo Display / Uploader */}
                   {fieldVisibility.logoUrl ? (
-                    <div className="relative group/logo mb-3 max-w-[160px]">
+                    <div className="relative group/logo max-w-[160px]">
                       <img src={fieldVisibility.logoUrl} className="max-h-12 object-contain rounded" alt="Logo" />
                       <button
                         type="button"
@@ -943,7 +1010,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                       </button>
                     </div>
                   ) : (
-                    <div className="border border-dashed border-outline-variant/60 hover:border-primary rounded p-2 flex flex-col items-center justify-center bg-surface-container-low/40 cursor-pointer relative mb-3 max-w-[160px] no-print">
+                    <div className="border border-dashed border-outline-variant/60 hover:border-primary rounded p-2 flex flex-col items-center justify-center bg-surface-container-low/40 cursor-pointer relative max-w-[160px] no-print">
                       <input
                         type="file"
                         accept="image/*"
@@ -964,32 +1031,118 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                     </div>
                   )}
 
-                  {/* Select Corporate Entity directly inline */}
-                  <div className="flex flex-col gap-0.5">
+                  {/* Bill To Info */}
+                  <div>
+                    <span style={{ color: accentColor }} className="text-[10px] font-bold uppercase tracking-wider block mb-1">
+                      {activeTmpl ? activeTmpl.customer.billToHeading : 'Bill To'}
+                    </span>
+                    <select
+                      value={selectedCustomerId || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedCustomerId(val);
+                        api.documents.update(id, { customerId: val || null }).catch(console.error);
+                      }}
+                      className="bg-transparent border-b border-dashed border-outline-variant/60 hover:border-primary font-bold text-[12px] focus:outline-none w-full py-0.5 text-on-surface mb-1"
+                    >
+                      <option value="">Unlinked Client</option>
+                      {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+
+                    {selectedCustomerId && (
+                      <div className="text-on-surface-variant/80 text-[11px] leading-tight space-y-0.5 mt-1 text-[10.5px]">
+                        {(() => {
+                          const cust = customers.find(c => c.id === selectedCustomerId);
+                          if (!cust) return null;
+                          return (
+                            <>
+                              {fieldVisibility.showCustAddress && (
+                                <>
+                                  <p>{cust.addressLine1 || 'No billing address set'}</p>
+                                  {cust.addressLine2 && <p>{cust.addressLine2}</p>}
+                                  <p>{cust.city || ''} {cust.postalCode || ''} {cust.country || ''}</p>
+                                </>
+                              )}
+                              {fieldVisibility.showCustEmail && <p>{cust.email}</p>}
+                              {fieldVisibility.showCustPhone && cust.phone && <p>{cust.phone}</p>}
+                              {fieldVisibility.showCustTax && cust.customFields && (
+                                <p className="mt-0.5 font-semibold text-primary">
+                                  {typeof cust.customFields === 'string' ? cust.customFields : JSON.stringify(cust.customFields)}
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Column: Title + Company Info */}
+                <div className="text-right space-y-4">
+                  <div>
+                    <h2 
+                      style={{ color: accentColor, fontSize: '20pt' }}
+                      className="font-bold uppercase tracking-wide inline-flex items-center gap-1 justify-end"
+                    >
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={(e) => {
+                          setTitle(e.target.value);
+                          triggerAutoSave(blocks, e.target.value);
+                        }}
+                        className="bg-transparent border-b border-dashed border-outline-variant/60 focus:border-primary focus:outline-none text-[18px] font-bold text-on-surface text-right w-44"
+                      />
+                    </h2>
+                  </div>
+
+                  {/* Meta details */}
+                  <div className="text-[11px] leading-relaxed">
+                    <p><strong className="font-semibold text-on-surface">Invoice No:</strong> {doc?.id.slice(0, 8).toUpperCase()}</p>
+                    <p><strong className="font-semibold text-on-surface">Issue Date:</strong> {doc ? new Date(doc.createdAt).toLocaleDateString() : ''}</p>
+                  </div>
+
+                  {/* Company Info */}
+                  <div className="flex flex-col gap-0.5 items-end">
                     <span className="text-[9px] text-on-surface-variant font-bold uppercase select-none">Billing Entity</span>
                     <select
                       value={selectedCompanyId || ''}
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const val = e.target.value;
                         setSelectedCompanyId(val);
                         api.documents.update(id, { companyId: val || null }).catch(console.error);
+                        // Auto-load company logo if no logo currently set
+                        if (val && !fieldVisibility.logoUrl) {
+                          try {
+                            const branding = await api.customization.getBranding(val);
+                            if (branding?.logoUrl) {
+                              setFieldVisibility(prev => ({ ...prev, logoUrl: branding.logoUrl || '' }));
+                            }
+                          } catch {}
+                        }
                       }}
                       style={{ color: accentColor }}
-                      className="bg-transparent border-b border-dashed border-outline-variant/60 hover:border-primary font-bold text-headline-sm focus:outline-none py-0.5"
+                      className="bg-transparent border-b border-dashed border-outline-variant/60 hover:border-primary font-bold text-[12px] focus:outline-none py-0.5 text-right"
                     >
                       <option value="">No Corporate Link</option>
                       {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
-                  
-                  {/* Show company address preview inline */}
+
                   {selectedCompanyId && (
-                    <div className="mt-1 text-on-surface-variant/80 text-[11px] leading-tight font-medium">
+                    <div className="text-right text-[11px] leading-relaxed text-on-surface-variant/90 space-y-0.5">
                       {(() => {
                         const comp = companies.find(c => c.id === selectedCompanyId);
                         if (!comp) return null;
+                        const contact = comp.contacts?.find((c: any) => c.isDefault) || comp.contacts?.[0];
+                        const cEmail = contact?.email;
+                        const cPhone = contact?.phone;
+                        const cWebsite = comp.customFields?.website || comp.customFields?.Website;
+                        const cCin = comp.registrationNumber || comp.customFields?.cin || comp.customFields?.CIN;
+                        const cPan = comp.customFields?.pan || comp.customFields?.PAN;
                         return (
-                          <div className="space-y-0.5 mt-1 text-[10.5px]">
+                          <>
                             {fieldVisibility.showOrgAddress && (
                               <>
                                 <p>{comp.addressLine1}</p>
@@ -997,115 +1150,16 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                 <p>{comp.city}, {comp.postalCode}, {comp.country}</p>
                               </>
                             )}
-                            {fieldVisibility.showOrgTaxId && comp.taxId && (
-                              <p className="mt-0.5 font-semibold text-primary">Tax ID: {comp.taxId}</p>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </div>
-
-                <div className="text-right text-[11.5px] leading-relaxed flex flex-col items-end">
-                  <div className="flex items-center gap-1">
-                    <strong className="text-on-surface">Invoice Title:</strong>
-                    <input
-                      type="text"
-                      value={title}
-                      onChange={(e) => {
-                        setTitle(e.target.value);
-                        triggerAutoSave(blocks, e.target.value);
-                      }}
-                      className="bg-transparent border-b border-dashed border-outline-variant/60 focus:border-primary focus:outline-none text-[11px] font-bold text-on-surface text-right w-44"
-                    />
-                  </div>
-                  <p><span className="text-on-surface-variant">Type:</span> <span className="font-bold">{doc?.type}</span></p>
-                  <p><span className="text-on-surface-variant">Status:</span> <span className="font-semibold text-primary">{status}</span></p>
-                </div>
-              </div>
-
-              {/* 2. CLIENT BILL TO & SHIP TO DETAILS BLOCK (Virtual) */}
-              <div 
-                onClick={() => setSelectedBlockId('billing-client')}
-                className={`flex gap-12 mb-6 border-b pb-4 z-10 cursor-pointer hover:ring-1 hover:ring-primary/45 rounded p-2 transition-all relative group/block
-                  ${selectedBlockId === 'billing-client' ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-outline-variant/40'}`}
-              >
-                {/* Floating badge controls */}
-                <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
-                  <span className="bg-primary text-on-primary text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[10px]">edit</span> Edit Client details
-                  </span>
-                </div>
-
-                <div className="flex-1">
-                  <span style={{ color: accentColor }} className="text-[10px] font-bold uppercase tracking-wider block mb-1">
-                    {activeTmpl ? activeTmpl.customer.billToHeading : 'Bill To'}
-                  </span>
-                  <select
-                    value={selectedCustomerId || ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSelectedCustomerId(val);
-                      api.documents.update(id, { customerId: val || null }).catch(console.error);
-                    }}
-                    className="bg-transparent border-b border-dashed border-outline-variant/60 hover:border-primary font-bold text-[12px] focus:outline-none w-full py-0.5 text-on-surface"
-                  >
-                    <option value="">Unlinked Client</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                  
-                  {/* Customer billing address preview inline */}
-                  {selectedCustomerId && (
-                    <div className="mt-1 text-on-surface-variant/80 text-[11px] leading-tight space-y-0.5 mt-1 text-[10.5px]">
-                      {(() => {
-                        const cust = customers.find(c => c.id === selectedCustomerId);
-                        if (!cust) return null;
-                        return (
-                          <>
-                            {fieldVisibility.showCustAddress && (
-                              <>
-                                <p>{cust.addressLine1 || 'No billing address set'}</p>
-                                {cust.addressLine2 && <p>{cust.addressLine2}</p>}
-                                <p>{cust.city || ''} {cust.postalCode || ''} {cust.country || ''}</p>
-                              </>
-                            )}
-                            {fieldVisibility.showCustEmail && <p>{cust.email}</p>}
-                            {fieldVisibility.showCustPhone && cust.phone && <p>{cust.phone}</p>}
-                            {fieldVisibility.showCustTax && cust.customFields && (
-                              <p className="mt-0.5 font-semibold text-primary">
-                                {typeof cust.customFields === 'string' ? cust.customFields : JSON.stringify(cust.customFields)}
-                              </p>
-                            )}
+                            {cEmail && <p><span className="font-semibold">Email:</span> {cEmail}</p>}
+                            {cWebsite && <p><span className="font-semibold">Website:</span> {cWebsite}</p>}
+                            {cPhone && <p><span className="font-semibold">Phone:</span> {cPhone}</p>}
+                            {fieldVisibility.showOrgTaxId && comp.taxId && <p><span className="font-semibold">GSTIN/VAT:</span> {comp.taxId}</p>}
+                            {cCin && <p><span className="font-semibold">CIN:</span> {cCin}</p>}
+                            {cPan && <p><span className="font-semibold">PAN:</span> {cPan}</p>}
                           </>
                         );
                       })()}
                     </div>
-                  )}
-                </div>
-
-                <div className="flex-1">
-                  {/* Optionally display ship to address */}
-                  {selectedCustomerId && (
-                    <>
-                      <span style={{ color: accentColor }} className="text-[10px] font-bold uppercase tracking-wider block mb-1">
-                        {activeTmpl ? activeTmpl.customer.shipToHeading : 'Ship To'}
-                      </span>
-                      <p className="font-bold text-[12px] text-on-surface">
-                        {(() => {
-                          const cust = customers.find(c => c.id === selectedCustomerId);
-                          return cust ? cust.name : '—';
-                        })()}
-                      </p>
-                      {fieldVisibility.showCustAddress && (
-                        <p className="text-on-surface-variant/80 text-[11px] mt-1">
-                          {(() => {
-                            const cust = customers.find(c => c.id === selectedCustomerId);
-                            return cust ? (cust.addressLine1 || 'Same as billing') : '—';
-                          })()}
-                        </p>
-                      )}
-                    </>
                   )}
                 </div>
               </div>
@@ -1272,125 +1326,146 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                         </div>
 
                         <div className="overflow-x-auto">
-                          <table className="w-full text-left border-collapse text-[11px] font-medium">
-                            <thead>
-                              <tr 
-                                style={{ 
-                                  backgroundColor: activeTmpl ? activeTmpl.theme.colors.tableHeaderBg : `${accentColor}10`,
-                                  color: activeTmpl ? activeTmpl.theme.colors.tableHeaderText : '#ffffff',
-                                  borderBottom: `2px solid ${accentColor}`
-                                }}
-                                className="text-on-surface-variant font-bold select-none text-[10px] uppercase tracking-wider"
-                              >
-                                {fieldVisibility.showTableSku && <th className="p-2 w-[15%]">SKU / Item</th>}
-                                <th className="p-2 w-[35%]">Description</th>
-                                {fieldVisibility.showTableType && <th className="p-2 w-[25%]">Type</th>}
-                                <th className="p-2 w-[15%] text-right">Amount (₹)</th>
-                                {fieldVisibility.showTableTaxCode && <th className="p-2 w-[10%] text-center">Tax</th>}
-                                <th className="p-2 w-[5%] text-right no-print"></th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-outline-variant/40">
-                              {(block.content?.items || []).map((item: any, itemIdx: number) => (
-                                <tr 
-                                  key={itemIdx} 
-                                  style={{
-                                    backgroundColor: activeTmpl && activeTmpl.table.zebra && itemIdx % 2 === 1 ? activeTmpl.theme.colors.zebraBg : 'transparent'
-                                  }}
-                                  className="hover:bg-surface-container-low/40"
-                                >
-                                  {/* Item SKU selection */}
-                                  {fieldVisibility.showTableSku && (
-                                    <td className="p-2">
-                                      <select
-                                        value={products.find(p => p.sku === item.sku)?.id || ''}
-                                        onChange={(e) => updateLineItemField(idx, itemIdx, 'productId', e.target.value)}
-                                        className="w-full bg-transparent focus:outline-none focus:ring-1 focus:ring-primary border border-outline-variant/60 rounded px-1 text-[11px] font-mono text-on-surface"
+                          {(() => {
+                            const sortedColumns = (activeTmpl?.table?.columns?.length 
+                              ? [...activeTmpl.table.columns]
+                              : [
+                                  { key: 'index', label: 'Sr. No', visible: true, width: 8, align: 'center', order: 0 },
+                                  { key: 'description', label: 'Description', visible: true, width: 45, align: 'left', order: 1 },
+                                  { key: 'type', label: 'Type', visible: fieldVisibility.showTableType, width: 20, align: 'left', order: 2 },
+                                  { key: 'amount', label: 'Amount (₹)', visible: true, width: 15, align: 'right', order: 3 },
+                                  { key: 'tax', label: 'Tax', visible: fieldVisibility.showTableTaxCode, width: 12, align: 'center', order: 4 }
+                                ])
+                                .filter(c => c.visible && c.key !== 'sku')
+                                .sort((a, b) => a.order - b.order);
+
+                            return (
+                              <table className="w-full text-left border-collapse text-[11px] font-medium">
+                                <thead>
+                                  <tr 
+                                    style={{ 
+                                      backgroundColor: activeTmpl ? activeTmpl.theme.colors.tableHeaderBg : `${accentColor}10`,
+                                      color: activeTmpl ? activeTmpl.theme.colors.tableHeaderText : '#ffffff',
+                                      borderBottom: `2px solid ${accentColor}`
+                                    }}
+                                    className="text-on-surface-variant font-bold select-none text-[10px] uppercase tracking-wider"
+                                  >
+                                    {sortedColumns.map(col => (
+                                      <th 
+                                        key={col.key} 
+                                        style={{ 
+                                          width: `${col.width}%`, 
+                                          textAlign: col.align === 'right' ? 'right' : col.align === 'center' ? 'center' : 'left' 
+                                        }}
+                                        className="p-2"
                                       >
-                                        <option value="">Manual SKU</option>
-                                        {products.map(p => (
-                                          <option key={p.id} value={p.id}>{p.sku}</option>
-                                        ))}
-                                      </select>
-                                      <input 
-                                        type="text" 
-                                        value={item.sku} 
-                                        onChange={(e) => updateLineItemField(idx, itemIdx, 'sku', e.target.value)}
-                                        placeholder="SKU"
-                                        className="w-full bg-transparent focus:outline-none border-b border-transparent focus:border-primary text-[10px] font-mono text-on-surface-variant mt-1"
-                                      />
-                                    </td>
-                                  )}
-
-                                  <td className="p-2 align-top">
-                                    <textarea
-                                      value={item.description}
-                                      onChange={(e) => updateLineItemField(idx, itemIdx, 'description', e.target.value)}
-                                      placeholder="Item summary details"
-                                      className="w-full bg-transparent focus:outline-none focus:ring-1 focus:ring-primary border border-outline-variant/60 rounded px-1 py-0.5 text-[11px] resize-none"
-                                      rows={1}
-                                    />
-                                  </td>
-
-                                  {fieldVisibility.showTableType && (
-                                    <td className="p-2 align-top">
-                                      <input 
-                                        type="text" 
-                                        value={item.type || ''}
-                                        onChange={(e) => updateLineItemField(idx, itemIdx, 'type', e.target.value)}
-                                        placeholder="Billing Type"
-                                        className="w-full bg-transparent focus:outline-none border-b border-outline-variant/60 focus:border-primary text-[11px]"
-                                      />
-                                    </td>
-                                  )}
-
-                                  <td className="p-2 text-right align-top">
-                                    <input 
-                                      type="number" 
-                                      value={item.rate}
-                                      onChange={(e) => updateLineItemField(idx, itemIdx, 'rate', Number(e.target.value) || 0)}
-                                      className="w-20 bg-transparent text-right focus:outline-none border-b border-outline-variant/60 focus:border-primary font-mono text-[11px]"
-                                    />
-                                  </td>
-
-                                  {fieldVisibility.showTableTaxCode && (
-                                    <td className="p-2 text-center align-top">
-                                      <select
-                                        value={item.taxCode || 'EXEMPT'}
-                                        onChange={(e) => updateLineItemField(idx, itemIdx, 'taxCode', e.target.value)}
-                                        className="bg-transparent focus:outline-none border border-outline-variant/60 rounded text-[10px] font-semibold text-on-surface w-full"
-                                      >
-                                        {taxes.map(t => (
-                                          <option key={t.id} value={t.code}>{t.name} ({Number(t.ratePercent)}%)</option>
-                                        ))}
-                                      </select>
-                                    </td>
-                                  )}
-
-                                  <td className="p-2 text-right align-top no-print flex items-center justify-end gap-1.5">
-                                    {item.sku && !products.some(p => p.sku === item.sku) && (
-                                      <button 
-                                        type="button"
-                                        onClick={() => handleSaveProductToMaster(item.sku, item.description, item.rate, item.unit, item.taxCode)}
-                                        className="text-primary hover:text-primary-fixed-variant transition-all duration-150 hover:scale-110 active:scale-90"
-                                        title="Save item to Master Catalog"
-                                      >
-                                        <span className="material-symbols-outlined text-[15px]">save</span>
-                                      </button>
-                                    )}
-                                    <button 
-                                      type="button"
-                                      onClick={() => removeLineItem(idx, itemIdx)}
-                                      className="text-on-surface-variant hover:text-error"
-                                      title="Remove item"
+                                        {col.label}
+                                      </th>
+                                    ))}
+                                    <th className="p-2 w-[5%] text-right no-print"></th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-outline-variant/40">
+                                  {(block.content?.items || []).map((item: any, itemIdx: number) => (
+                                    <tr 
+                                      key={itemIdx} 
+                                      style={{
+                                        backgroundColor: activeTmpl && activeTmpl.table.zebra && itemIdx % 2 === 1 ? activeTmpl.theme.colors.zebraBg : 'transparent'
+                                      }}
+                                      className="hover:bg-surface-container-low/40"
                                     >
-                                      <span className="material-symbols-outlined text-[15px]">close</span>
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                                      {sortedColumns.map(col => {
+                                        if (col.key === 'index') {
+                                          return (
+                                            <td key={col.key} style={{ textAlign: 'center' }} className="p-2 align-top text-on-surface-variant font-mono text-[11px] select-none">
+                                              {itemIdx + 1}
+                                            </td>
+                                          );
+                                        }
+                                        if (col.key === 'description') {
+                                          return (
+                                            <td key={col.key} className="p-2 align-top">
+                                              <textarea
+                                                value={item.description}
+                                                onChange={(e) => updateLineItemField(idx, itemIdx, 'description', e.target.value)}
+                                                placeholder="Item summary details"
+                                                className="w-full bg-transparent focus:outline-none focus:ring-1 focus:ring-primary border border-outline-variant/60 rounded px-1 py-0.5 text-[11px] resize-none"
+                                                rows={1}
+                                              />
+                                            </td>
+                                          );
+                                        }
+                                        if (col.key === 'type') {
+                                          return (
+                                            <td key={col.key} className="p-2 align-top">
+                                              <input 
+                                                type="text" 
+                                                value={item.type || ''}
+                                                onChange={(e) => updateLineItemField(idx, itemIdx, 'type', e.target.value)}
+                                                placeholder="Billing Type"
+                                                className="w-full bg-transparent focus:outline-none border-b border-outline-variant/60 focus:border-primary text-[11px]"
+                                              />
+                                            </td>
+                                          );
+                                        }
+                                        if (col.key === 'amount') {
+                                          return (
+                                            <td key={col.key} style={{ textAlign: 'right' }} className="p-2 align-top">
+                                              <input 
+                                                type="number" 
+                                                value={item.rate}
+                                                onChange={(e) => updateLineItemField(idx, itemIdx, 'rate', Number(e.target.value) || 0)}
+                                                className="w-20 bg-transparent text-right focus:outline-none border-b border-outline-variant/60 focus:border-primary font-mono text-[11px]"
+                                              />
+                                            </td>
+                                          );
+                                        }
+                                        if (col.key === 'tax') {
+                                          return (
+                                            <td key={col.key} style={{ textAlign: 'center' }} className="p-2 align-top">
+                                              <select
+                                                value={item.taxCode || 'EXEMPT'}
+                                                onChange={(e) => updateLineItemField(idx, itemIdx, 'taxCode', e.target.value)}
+                                                className="bg-transparent focus:outline-none border border-outline-variant/60 rounded text-[10px] font-semibold text-on-surface w-full"
+                                              >
+                                                {taxes.map(t => (
+                                                  <option key={t.id} value={t.code}>{t.name} ({Number(t.ratePercent)}%)</option>
+                                                ))}
+                                              </select>
+                                            </td>
+                                          );
+                                        }
+                                        return (
+                                          <td key={col.key} className="p-2 align-top">
+                                            <input 
+                                              type="text" 
+                                              value={item.customFields?.[col.key] || ''}
+                                              onChange={(e) => {
+                                                const customFields = { ...(item.customFields || {}), [col.key]: e.target.value };
+                                                updateLineItemField(idx, itemIdx, 'customFields', customFields);
+                                              }}
+                                              placeholder={col.label}
+                                              className="w-full bg-transparent focus:outline-none border-b border-outline-variant/60 focus:border-primary text-[11px]"
+                                            />
+                                          </td>
+                                        );
+                                      })}
+                                      <td className="p-2 text-right align-top no-print flex items-center justify-end gap-1.5">
+                                        <button 
+                                          type="button"
+                                          onClick={() => removeLineItem(idx, itemIdx)}
+                                          className="text-on-surface-variant hover:text-error"
+                                          title="Remove item"
+                                        >
+                                          <span className="material-symbols-outlined text-[15px]">close</span>
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            );
+                          })()}
                         </div>
 
                         {/* Add Row control */}
@@ -1617,103 +1692,102 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-8 text-[10.5px] leading-tight">
-                  {fieldVisibility.showPaymentInstructions && (
-                    <div>
-                      <h6 style={{ color: accentColor }} className="font-bold text-[9px] uppercase tracking-wider mb-1">
-                        {activeTmpl ? activeTmpl.payment.heading : 'Payment Instructions'}
-                      </h6>
-                      <p className="text-on-surface-variant/80">{activeTmpl ? activeTmpl.payment.instructions : 'Please settle outstanding amount within 30 days.'}</p>
-                    </div>
-                  )}
-                  
-                  {fieldVisibility.showBankDetails && (
-                    <div>
-                      <h6 style={{ color: accentColor }} className="font-bold text-[9px] uppercase tracking-wider mb-1">
-                        {activeTmpl ? activeTmpl.bank.heading : 'Bank Transfer Details'}
-                      </h6>
-                      {(() => {
-                        const comp = companies.find(c => c.id === selectedCompanyId);
-                        if (!comp) return <p className="text-on-surface-variant/60 italic">No corporate bank linked</p>;
-                        return (
-                          <div className="flex justify-between items-start gap-4">
-                            <div className="space-y-0.5">
-                              <p><strong className="font-semibold text-on-surface">Bank:</strong> {comp.bankName || '—'}</p>
-                              <p><strong className="font-semibold text-on-surface">Account Name:</strong> {comp.name}</p>
-                              <p><strong className="font-semibold text-on-surface">IBAN:</strong> {comp.bankIban || '—'}</p>
-                              <p><strong className="font-semibold text-on-surface">BIC/SWIFT:</strong> {comp.bankBic || '—'}</p>
-                            </div>
+                <div className="space-y-6">
+                  {[...(activeTmpl?.footerBlocks || [
+                    { key: 'payment', label: 'Payment Instructions', visible: fieldVisibility.showPaymentInstructions, order: 0 },
+                    { key: 'bank', label: 'Bank Details', visible: fieldVisibility.showBankDetails, order: 1 },
+                    { key: 'qr', label: 'QR Code', visible: !!fieldVisibility.qrUrl, order: 2 },
+                    { key: 'signature', label: 'Signature', visible: fieldVisibility.showSignature, order: 3 },
+                    { key: 'footer', label: 'Footer Declaration', visible: fieldVisibility.showFooter, order: 4 },
+                  ])].sort((a, b) => a.order - b.order).map(block => {
+                    if (!block.visible) return null;
 
-                            {/* QR Code Display / Uploader */}
-                            {fieldVisibility.qrUrl ? (
-                              <div className="relative group/qr w-20 h-20 shrink-0">
-                                <img src={fieldVisibility.qrUrl} className="w-20 h-20 object-contain border border-outline-variant/60 rounded p-1" alt="QR" />
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setFieldVisibility(prev => ({ ...prev, qrUrl: '' }));
-                                  }}
-                                  className="absolute -top-1.5 -right-1.5 bg-error text-on-error hover:bg-error-container rounded-full w-4 h-4 flex items-center justify-center shadow-xs no-print"
-                                  title="Remove QR Code"
-                                >
-                                  <span className="material-symbols-outlined text-[10px]">close</span>
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="border border-dashed border-outline-variant/60 hover:border-primary rounded p-2.5 flex flex-col items-center justify-center bg-surface-container-low/40 cursor-pointer relative w-24 shrink-0 no-print">
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      const reader = new FileReader();
-                                      reader.onloadend = () => {
-                                        setFieldVisibility(prev => ({ ...prev, qrUrl: reader.result as string }));
-                                      };
-                                      reader.readAsDataURL(file);
-                                    }
-                                  }}
-                                  className="absolute inset-0 opacity-0 cursor-pointer"
-                                />
-                                <span className="material-symbols-outlined text-primary text-[16px]">qr_code_2</span>
-                                <span className="text-[9px] font-bold text-on-surface-variant mt-0.5">Upload QR</span>
-                              </div>
-                            )}
+                    if (block.key === 'payment' && fieldVisibility.showPaymentInstructions) {
+                      return (
+                        <div key={block.key} className="text-[10.5px] leading-tight">
+                          <h6 style={{ color: accentColor }} className="font-bold text-[9px] uppercase tracking-wider mb-1">
+                            {activeTmpl ? activeTmpl.payment.heading : 'Payment Instructions'}
+                          </h6>
+                          <p className="text-on-surface-variant/80">{activeTmpl ? activeTmpl.payment.instructions : 'Please settle outstanding amount within 30 days.'}</p>
+                        </div>
+                      );
+                    }
+
+                    if (block.key === 'bank' && fieldVisibility.showBankDetails) {
+                      const comp = companies.find(c => c.id === selectedCompanyId);
+                      if (!comp) return null;
+                      return (
+                        <div key={block.key} className="text-[10.5px] leading-tight">
+                          <h6 style={{ color: accentColor }} className="font-bold text-[9px] uppercase tracking-wider mb-1">
+                            {activeTmpl ? activeTmpl.bank.heading : 'Bank Transfer Details'}
+                          </h6>
+                          <div className="space-y-0.5">
+                            <p><strong className="font-semibold text-on-surface">Bank:</strong> {comp.bankName || '—'}</p>
+                            <p><strong className="font-semibold text-on-surface">Account Name:</strong> {comp.name}</p>
+                            <p><strong className="font-semibold text-on-surface">IBAN:</strong> {comp.bankIban || '—'}</p>
+                            <p><strong className="font-semibold text-on-surface">BIC/SWIFT:</strong> {comp.bankBic || '—'}</p>
                           </div>
-                        );
-                      })()}
-                    </div>
-                  )}
+                        </div>
+                      );
+                    }
+
+                    if (block.key === 'qr' && fieldVisibility.qrUrl) {
+                      return (
+                        <div key={block.key} className="relative group/qr w-20 h-20 shrink-0">
+                          <img src={fieldVisibility.qrUrl} className="w-20 h-20 object-contain border border-outline-variant/60 rounded p-1" alt="QR" />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFieldVisibility(prev => ({ ...prev, qrUrl: '' }));
+                            }}
+                            className="absolute -top-1.5 -right-1.5 bg-error text-on-error hover:bg-error-container rounded-full w-4 h-4 flex items-center justify-center shadow-xs no-print"
+                            title="Remove QR Code"
+                          >
+                            <span className="material-symbols-outlined text-[10px]">close</span>
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    if (block.key === 'signature' && fieldVisibility.showSignature && activeTmpl && activeTmpl.signature.show) {
+                      return (
+                        <div key={block.key} className="pt-4 self-end text-right text-[10px] w-full flex justify-end">
+                          <div className="text-center w-48 border-t border-outline-variant pt-1 mt-6 pr-4">
+                            <p className="font-bold text-on-surface">{activeTmpl.signature.label}</p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (block.key === 'footer' && fieldVisibility.showFooter && activeTmpl && activeTmpl.footer.show) {
+                      return (
+                        <div key={block.key} className="pt-2 border-t border-outline-variant/30 text-[9px] text-on-surface-variant/70 text-center flex justify-between w-full">
+                          <span>{activeTmpl.footer.text}</span>
+                          {activeTmpl.footer.showPageNumbers && <span>Page 1 of 1</span>}
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })}
                 </div>
-
-                {/* Signatory line */}
-                {fieldVisibility.showSignature && activeTmpl && activeTmpl.signature.show && (
-                  <div className="mt-8 pt-4 self-end text-right text-[10px] w-full flex justify-end">
-                    <div className="text-center w-48 border-t border-outline-variant pt-1 mt-6 pr-4">
-                      <p className="font-bold text-on-surface">{activeTmpl.signature.label}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Bottom line */}
-                {fieldVisibility.showFooter && activeTmpl && activeTmpl.footer.show && (
-                  <div className="mt-8 pt-2 border-t border-outline-variant/30 text-[9px] text-on-surface-variant/70 text-center flex justify-between w-full">
-                    <span>{activeTmpl.footer.text}</span>
-                    {activeTmpl.footer.showPageNumbers && <span>Page 1 of 1</span>}
-                  </div>
-                )}
               </div>
 
             </div>
           </div>
         </main>
 
-        {/* ======================================================== */}
-        {/* RIGHT PANEL: INSPECTOR & REVISIONS TABS */}
-        {/* ======================================================== */}
-        <aside className="w-[320px] bg-surface border-l border-outline-variant flex flex-col h-full absolute right-0 top-0 shrink-0 select-none shadow-sm">
+        <aside 
+          style={{ width: `${rightSidebarWidth}px` }}
+          className="bg-surface border-l border-outline-variant flex flex-col h-full absolute right-0 top-0 shrink-0 select-none shadow-sm"
+        >
+          {/* Resize Handle */}
+          <div 
+            onMouseDown={startResizingRight}
+            className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/25 active:bg-primary/45 transition-colors z-50"
+            title="Drag to resize properties panel"
+          />
           
           {/* Tabs header */}
           <div className="flex border-b border-outline-variant bg-surface-container-lowest p-1 gap-1">
@@ -2039,39 +2113,144 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                           <h4 className="font-bold text-[12px] text-on-surface">Pricing Table Config</h4>
                         </div>
                         
-                         {/* Column visibility overrides */}
-                         <div className="space-y-2">
-                           <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Columns Visibility</span>
-                           <div className="space-y-2 border border-outline-variant/40 rounded-lg p-2.5 bg-surface-container-low/40">
-                             <label className="flex items-center gap-2 font-semibold">
-                               <input
-                                 type="checkbox"
-                                 checked={fieldVisibility.showTableSku}
-                                 onChange={(e) => setFieldVisibility(prev => ({ ...prev, showTableSku: e.target.checked }))}
-                                 className="rounded text-primary focus:ring-primary h-4 w-4"
-                               />
-                               Show SKU/Item ID
-                             </label>
-                             <label className="flex items-center gap-2 font-semibold">
-                               <input
-                                 type="checkbox"
-                                 checked={fieldVisibility.showTableType}
-                                 onChange={(e) => setFieldVisibility(prev => ({ ...prev, showTableType: e.target.checked }))}
-                                 className="rounded text-primary focus:ring-primary h-4 w-4"
-                               />
-                               Show Type Column
-                             </label>
-                             <label className="flex items-center gap-2 font-semibold">
-                               <input
-                                 type="checkbox"
-                                 checked={fieldVisibility.showTableTaxCode}
-                                 onChange={(e) => setFieldVisibility(prev => ({ ...prev, showTableTaxCode: e.target.checked }))}
-                                 className="rounded text-primary focus:ring-primary h-4 w-4"
-                               />
-                               Show Tax Code / Rate
-                             </label>
-                           </div>
-                         </div>
+                                 {/* Dynamic Columns Configuration */}
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1.5 mt-1">
+                              <span className="text-[10px] text-on-surface-variant font-bold uppercase">Columns Setup</span>
+                              {activeTmpl && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newKey = `col_${Date.now()}`;
+                                    const newCol = {
+                                      key: newKey,
+                                      label: 'New Column',
+                                      visible: true,
+                                      width: 15,
+                                      align: 'left',
+                                      order: activeTmpl.table.columns.length
+                                    };
+                                    const newCols = [...activeTmpl.table.columns, newCol];
+                                    api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                      table: { ...activeTmpl.table, columns: newCols }
+                                    }).then(async () => {
+                                      const updated = await api.templateEngine.listDefinitions();
+                                      setDesignerTemplates(updated);
+                                    });
+                                  }}
+                                  className="text-[10px] text-primary font-bold flex items-center gap-0.5 hover:underline cursor-pointer bg-transparent border-none"
+                                >
+                                  <span className="material-symbols-outlined text-[12px]">add</span> Add
+                                </button>
+                              )}
+                            </div>
+                            
+                            <div className="space-y-3">
+                              {activeTmpl && [...activeTmpl.table.columns].sort((a,b) => a.order - b.order).map((col) => (
+                                <div key={col.key} className="border border-outline-variant/50 rounded-lg p-2.5 space-y-2 bg-surface-container-lowest/50 text-[11px] font-semibold">
+                                  <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-1.5">
+                                      <input
+                                        type="checkbox"
+                                        checked={col.visible}
+                                        onChange={(e) => {
+                                          const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, visible: e.target.checked } : c);
+                                          api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                            table: { ...activeTmpl.table, columns: newCols }
+                                          }).then(async () => {
+                                            const updated = await api.templateEngine.listDefinitions();
+                                            setDesignerTemplates(updated);
+                                          });
+                                        }}
+                                        className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
+                                      />
+                                      <span className="font-bold text-on-surface truncate max-w-[120px]">{col.label || col.key}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newCols = activeTmpl.table.columns.filter((c: any) => c.key !== col.key);
+                                        api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                          table: { ...activeTmpl.table, columns: newCols }
+                                        }).then(async () => {
+                                          const updated = await api.templateEngine.listDefinitions();
+                                          setDesignerTemplates(updated);
+                                        });
+                                      }}
+                                      className="text-on-surface-variant hover:text-error cursor-pointer bg-transparent border-none"
+                                      title="Delete Column"
+                                    >
+                                      <span className="material-symbols-outlined text-[14px]">delete</span>
+                                    </button>
+                                  </div>
+                                  
+                                  {col.visible && (
+                                    <div className="space-y-2 text-body-sm mt-1">
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="text-[9px] text-on-surface-variant uppercase font-bold">Rename Label</span>
+                                          <input
+                                            type="text"
+                                            value={col.label}
+                                            onChange={(e) => {
+                                              const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, label: e.target.value } : c);
+                                              api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                                table: { ...activeTmpl.table, columns: newCols }
+                                              }).then(async () => {
+                                                const updated = await api.templateEngine.listDefinitions();
+                                                setDesignerTemplates(updated);
+                                              });
+                                            }}
+                                            className="px-1.5 py-0.8 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[10px]"
+                                          />
+                                        </div>
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="text-[9px] text-on-surface-variant uppercase font-bold">Align</span>
+                                          <select
+                                            value={col.align || 'left'}
+                                            onChange={(e) => {
+                                              const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, align: e.target.value } : c);
+                                              api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                                table: { ...activeTmpl.table, columns: newCols }
+                                              }).then(async () => {
+                                                const updated = await api.templateEngine.listDefinitions();
+                                                setDesignerTemplates(updated);
+                                              });
+                                            }}
+                                            className="px-1.5 py-0.8 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[11px] text-on-surface font-semibold cursor-pointer"
+                                          >
+                                            <option value="left">Left</option>
+                                            <option value="center">Center</option>
+                                            <option value="right">Right</option>
+                                          </select>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="flex flex-col gap-0.5 font-mono">
+                                        <span className="text-[9px] text-on-surface-variant uppercase font-bold">Width: {col.width}%</span>
+                                        <input
+                                          type="range"
+                                          min="5"
+                                          max="70"
+                                          value={col.width}
+                                          onChange={(e) => {
+                                            const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, width: Number(e.target.value) || 10 } : c);
+                                            api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                              table: { ...activeTmpl.table, columns: newCols }
+                                            }).then(async () => {
+                                              const updated = await api.templateEngine.listDefinitions();
+                                              setDesignerTemplates(updated);
+                                            });
+                                          }}
+                                          className="w-full accent-primary h-1 bg-surface-variant rounded appearance-none cursor-pointer"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
 
                          {/* Pricing adjustments */}
                          <div className="space-y-3">
@@ -2197,6 +2376,33 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                         Show Footer Text Line
                       </label>
                     </div>
+
+                    {fieldVisibility.showBankDetails && activeTmpl && activeTmpl.bank && (
+                      <div className="flex flex-col gap-2 p-2.5 border border-outline-variant/40 rounded-lg bg-surface-container-low/40">
+                        <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Display Bank Fields</span>
+                        <div className="space-y-2 mt-1">
+                          {activeTmpl.bank.fields.map((f: any) => (
+                            <label key={f.key} className="flex items-center justify-between text-[11px] font-semibold cursor-pointer">
+                              <span className="capitalize">{f.key.replace('bankName', 'Bank').replace('account', 'Account')}</span>
+                              <input
+                                type="checkbox"
+                                checked={f.visible}
+                                onChange={(e) => {
+                                  const newF = activeTmpl.bank.fields.map((field: any) => field.key === f.key ? { ...field, visible: e.target.checked } : field);
+                                  api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                    bank: { ...activeTmpl.bank, fields: newF }
+                                  }).then(async () => {
+                                    const updated = await api.templateEngine.listDefinitions();
+                                    setDesignerTemplates(updated);
+                                  });
+                                }}
+                                className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="h-px bg-outline-variant/60 w-full pt-1"></div>
 

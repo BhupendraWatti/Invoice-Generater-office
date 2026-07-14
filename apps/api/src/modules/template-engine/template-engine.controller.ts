@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { TemplateEngineService } from './template-engine.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('template-engine')
 @UseGuards(JwtAuthGuard)
 export class TemplateEngineController {
+  private readonly logger = new Logger(TemplateEngineController.name);
   constructor(private readonly service: TemplateEngineService) {}
 
   @Get('definitions')
@@ -37,7 +38,15 @@ export class TemplateEngineController {
     @Param('documentId') documentId: string,
     @Body() body: { templateId: string; format: 'pdf' | 'docx' }
   ) {
-    return this.service.render(documentId, body.templateId, body.format);
+    try {
+      return await this.service.render(documentId, body.templateId, body.format);
+    } catch (err: any) {
+      this.logger.error(`Render failed for document ${documentId}: ${err?.message}`, err?.stack);
+      throw new HttpException(
+        { message: err?.message || 'Render failed', detail: err?.stack?.split('\n')[0] || '' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post('preview')

@@ -351,7 +351,7 @@ model DocumentBlock {
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   sortOrder  Int      @default(0)
   blockType  String   // e.g., "COVER", "TEXT", "TABLE", "NOTES"
-  content    String   @db.Text // JSON string representing properties specific to this block
+  content    String   @db.LongText // JSON string representing properties specific to this block
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -364,7 +364,7 @@ model DocumentVersion {
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   version    Int
   title      String
-  content    String   @db.Text // Serialized JSON of all document blocks
+  content    String   @db.LongText // Serialized JSON of all document blocks
   createdAt  DateTime @default(now())
 
   @@map("document_versions")
@@ -514,7 +514,7 @@ model CompanyBranding {
   id           String   @id @default(uuid())
   companyId    String   @unique
   company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  logoUrl      String?
+  logoUrl      String?  @db.LongText
   signatures   Json?    // signature URLs list
   stamps       Json?    // stamp URLs list
   letterhead   String?  @db.Text

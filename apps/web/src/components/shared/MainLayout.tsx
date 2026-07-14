@@ -87,7 +87,6 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         {/* Sticky Top Header */}
         <TopHeader
           onSearchClick={() => setSearchOpen(true)}
-          onNewDocumentClick={() => setNewDocOpen(true)}
         />
 
         {/* Central Workspace Content */}

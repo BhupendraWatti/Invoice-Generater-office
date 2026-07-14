@@ -46,6 +46,9 @@ importers:
       docx:
         specifier: ^8.5.0
         version: 8.6.0
+      multer:
+        specifier: ^2.2.0
+        version: 2.2.0
       passport:
         specifier: ^0.7.0
         version: 0.7.0

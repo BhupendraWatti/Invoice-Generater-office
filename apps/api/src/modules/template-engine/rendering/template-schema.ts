@@ -82,7 +82,7 @@ export const BASE_TEMPLATE: TemplateDefinitionDto = {
   },
   table: {
     columns: [
-      { key: 'index', label: '#', visible: true, width: 5, align: 'center', order: 0 },
+      { key: 'index', label: 'Sr. No', visible: true, width: 5, align: 'center', order: 0 },
       { key: 'description', label: 'Item & Description', visible: true, width: 50, align: 'left', order: 1 },
       { key: 'type', label: 'Type', visible: true, width: 20, align: 'left', order: 1.5 },
       { key: 'tax', label: 'Tax Rate', visible: false, width: 10, align: 'right', order: 4 },
@@ -141,6 +141,13 @@ export const BASE_TEMPLATE: TemplateDefinitionDto = {
     text: 'Granth Infotech Private Limited — Services & Software Delivery Division',
     showPageNumbers: true,
   },
+  footerBlocks: [
+    { key: 'payment', label: 'Payment Instructions', visible: true, order: 0 },
+    { key: 'bank', label: 'Bank Details', visible: true, order: 1 },
+    { key: 'qr', label: 'QR Code', visible: true, order: 2 },
+    { key: 'signature', label: 'Signature', visible: true, order: 3 },
+    { key: 'footer', label: 'Footer Declaration', visible: true, order: 4 },
+  ],
 };
 
 // Deep merge helper

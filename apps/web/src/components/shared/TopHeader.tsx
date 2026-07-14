@@ -2,15 +2,14 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { api } from '../../lib/api';
+import { api, getCookie } from '../../lib/api';
 import { NotificationDto } from '@docflow/shared-types';
 
 interface TopHeaderProps {
   onSearchClick: () => void;
-  onNewDocumentClick: () => void;
 }
 
-export default function TopHeader({ onSearchClick, onNewDocumentClick }: TopHeaderProps) {
+export default function TopHeader({ onSearchClick }: TopHeaderProps) {
   const { user } = useAuth();
   
   // Notification states
@@ -62,13 +61,19 @@ export default function TopHeader({ onSearchClick, onNewDocumentClick }: TopHead
   };
 
   useEffect(() => {
+    const token = getCookie('token');
+    if (!token) return;
+
     loadNotifications();
     loadCompanies();
     loadActivities();
     // Poll status every 10 seconds for real-time responsiveness
     const timer = setInterval(() => {
-      loadNotifications();
-      loadActivities();
+      const currentToken = getCookie('token');
+      if (currentToken) {
+        loadNotifications();
+        loadActivities();
+      }
     }, 10000);
     return () => clearInterval(timer);
   }, []);
@@ -171,13 +176,7 @@ export default function TopHeader({ onSearchClick, onNewDocumentClick }: TopHead
 
       {/* Right: Actions */}
       <div className="flex items-center space-x-4 flex-1 justify-end">
-        <button
-          onClick={onNewDocumentClick}
-          className="bg-primary text-on-primary font-label-md text-[12px] px-3.5 py-1.5 rounded flex items-center gap-1 hover:bg-primary-fixed-variant transition-colors shadow-sm font-semibold active:scale-95 transition-transform"
-        >
-          <span className="material-symbols-outlined text-[16px]">add</span>
-          New Document
-        </button>
+
         
         <div className="flex items-center space-x-3 text-on-surface-variant">
           {/* Message / Activity comments popover */}

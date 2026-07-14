@@ -28,6 +28,17 @@ export default function RenewalsSpreadsheetPage() {
   const [currency, setCurrency] = useState<'INR' | 'USD'>('INR');
   const currencySymbol = currency === 'INR' ? '₹' : '$';
 
+  const formatInputDate = (dateVal: any) => {
+    if (!dateVal) return '';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  };
+
   const loadRenewals = async () => {
     setLoading(true);
     try {
@@ -417,7 +428,7 @@ export default function RenewalsSpreadsheetPage() {
                             <td className="p-2 align-middle">
                               <input 
                                 type="date"
-                                value={new Date(r.renewalDate).toISOString().split('T')[0]}
+                                value={formatInputDate(r.renewalDate)}
                                 onChange={(e) => handleCellChange(r.id, 'renewalDate', e.target.value)}
                                 className="w-full bg-transparent focus:bg-surface-container-low border border-transparent hover:border-outline-variant/60 focus:border-primary rounded px-1.5 py-0.5 text-on-surface-variant font-mono focus:outline-none text-[10px]"
                               />

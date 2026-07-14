@@ -34,6 +34,18 @@ export default function TemplateDesignerWorkspacePage() {
         api.templateEngine.getDefinition(id),
         api.documents.list({ limit: 20 }),
       ]);
+      
+      // Seed default footer layout blocks if undefined
+      if (!def.footerBlocks) {
+        def.footerBlocks = [
+          { key: 'payment', label: 'Payment Instructions', visible: def.payment?.show ?? true, order: 0 },
+          { key: 'bank', label: 'Bank Details', visible: def.bank?.show ?? true, order: 1 },
+          { key: 'qr', label: 'QR Code', visible: true, order: 2 },
+          { key: 'signature', label: 'Signature', visible: def.signature?.show ?? true, order: 3 },
+          { key: 'footer', label: 'Footer Declaration', visible: def.footer?.show ?? true, order: 4 },
+        ];
+      }
+      
       setTemplateDef(def);
       setDocuments(docList);
       if (docList.length > 0) {
@@ -184,6 +196,7 @@ export default function TemplateDesignerWorkspacePage() {
               { id: 'bank', label: 'Bank Details', icon: 'account_balance' },
               { id: 'watermark', label: 'Watermark Stamp', icon: 'approval' },
               { id: 'footer', label: 'Footer info', icon: 'subtitles' },
+              { id: 'footerBlocks', label: 'Footer Layout Blocks', icon: 'reorder' },
             ].map(item => (
               <button
                 key={item.id}
@@ -264,52 +277,67 @@ export default function TemplateDesignerWorkspacePage() {
               </div>
             )}
 
-            {/* Document Title header */}
-            {templateDef.header.showTitle && (
-              <div className="mb-4">
-                <h2 
-                  style={{ color: themeColors.primary, fontSize: `${templateDef.theme.baseFontSize + 12}pt` }}
-                  className="font-bold uppercase tracking-wide"
-                >
-                  {invoiceData.documentType}
-                </h2>
-                {templateDef.header.accentBar && (
-                  <div style={{ backgroundColor: themeColors.primary }} className="h-0.5 w-full mt-1"></div>
+            {/* Redesigned Document Header */}
+            <div className="grid grid-cols-2 gap-8 mb-8 z-10">
+              {/* Left Column: Logo + Bill To */}
+              <div className="space-y-6">
+                {templateDef.logo.enabled && invoiceData.logoUrl && (
+                  <div className={`flex justify-${templateDef.logo.position === 'right' ? 'end' : templateDef.logo.position === 'center' ? 'center' : 'start'}`}>
+                    <img 
+                      src={invoiceData.logoUrl} 
+                      alt="Logo" 
+                      style={{ maxWidth: `${templateDef.logo.maxWidth}px`, maxHeight: '60px' }} 
+                      className="object-contain"
+                    />
+                  </div>
+                )}
+                {templateDef.customer.showBillTo && (
+                  <div>
+                    <h5 style={{ color: themeColors.primary }} className="font-bold text-[10px] uppercase tracking-wider mb-1.5">{templateDef.customer.billToHeading}</h5>
+                    <p className="font-bold text-on-surface">{invoiceData.billTo.name}</p>
+                    {invoiceData.billTo.lines.map((ln, i) => <p key={i} className="text-on-surface-variant/80 text-[11px] leading-snug">{ln}</p>)}
+                    {invoiceData.billTo.phone && <p className="text-on-surface-variant/80 text-[11px] leading-snug">{invoiceData.billTo.phone}</p>}
+                    {invoiceData.billTo.email && <p className="text-on-surface-variant/80 text-[11px] leading-snug">{invoiceData.billTo.email}</p>}
+                    {invoiceData.billTo.taxId && <p className="text-on-surface-variant/80 text-[11px] mt-1 font-semibold">{invoiceData.billTo.taxId}</p>}
+                  </div>
                 )}
               </div>
-            )}
 
-            {/* Organizations details & Document Meta */}
-            <div className="flex justify-between items-start gap-4 mb-6 z-10">
-              <div>
-                <h4 style={{ color: themeColors.primary }} className="font-bold mb-1">{invoiceData.organization.name}</h4>
-                {invoiceData.organization.lines.map((ln, i) => <p key={i} className="text-on-surface-variant/80 text-[11px] leading-tight">{ln}</p>)}
-                {invoiceData.organization.taxId && <p className="text-on-surface-variant/80 text-[11px] mt-1">{invoiceData.organization.taxId}</p>}
-              </div>
-              <div className="text-right text-[11px] leading-relaxed">
-                <p><strong className="font-semibold text-on-surface">Invoice No:</strong> {invoiceData.documentNumber}</p>
-                <p><strong className="font-semibold text-on-surface">Issue Date:</strong> {formatDate(invoiceData.issueDate)}</p>
-                {invoiceData.dueDate && <p><strong className="font-semibold text-on-surface">Due Date:</strong> {formatDate(invoiceData.dueDate)}</p>}
-              </div>
-            </div>
+              {/* Right Column: Title + Company Info */}
+              <div className="text-right space-y-4">
+                {templateDef.header.showTitle && (
+                  <div>
+                    <h2 
+                      style={{ color: themeColors.primary, fontSize: `${templateDef.theme.baseFontSize + 12}pt` }}
+                      className="font-bold uppercase tracking-wide"
+                    >
+                      {invoiceData.documentType}
+                    </h2>
+                    {templateDef.header.accentBar && (
+                      <div style={{ backgroundColor: themeColors.primary }} className="h-0.5 w-full mt-1"></div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Meta details */}
+                <div className="text-[11px] leading-relaxed">
+                  <p><strong className="font-semibold text-on-surface">Invoice No:</strong> {invoiceData.documentNumber}</p>
+                  <p><strong className="font-semibold text-on-surface">Issue Date:</strong> {formatDate(invoiceData.issueDate)}</p>
+                  {invoiceData.dueDate && <p><strong className="font-semibold text-on-surface">Due Date:</strong> {formatDate(invoiceData.dueDate)}</p>}
+                </div>
 
-            {/* Client address row details */}
-            <div className="flex gap-12 mb-8 z-10">
-              {templateDef.customer.showBillTo && (
-                <div className="flex-1">
-                  <h5 style={{ color: themeColors.primary }} className="font-bold text-[10px] uppercase tracking-wider mb-1.5">{templateDef.customer.billToHeading}</h5>
-                  <p className="font-bold text-on-surface">{invoiceData.billTo.name}</p>
-                  {invoiceData.billTo.lines.map((ln, i) => <p key={i} className="text-on-surface-variant/80 text-[11px] leading-snug">{ln}</p>)}
-                  {invoiceData.billTo.taxId && <p className="text-on-surface-variant/80 text-[11px] mt-1 font-semibold">{invoiceData.billTo.taxId}</p>}
+                {/* Company details */}
+                <div className="text-[11px] leading-relaxed text-on-surface-variant/90 space-y-0.5">
+                  <p className="font-bold text-on-surface text-[12px]">{invoiceData.organization.name}</p>
+                  {invoiceData.organization.lines.map((ln, i) => <p key={i} className="leading-tight">{ln}</p>)}
+                  {invoiceData.organization.email && <p><span className="font-semibold">Email:</span> {invoiceData.organization.email}</p>}
+                  {invoiceData.organization.website && <p><span className="font-semibold">Website:</span> {invoiceData.organization.website}</p>}
+                  {invoiceData.organization.phone && <p><span className="font-semibold">Phone:</span> {invoiceData.organization.phone}</p>}
+                  {invoiceData.organization.taxId && <p><span className="font-semibold">GSTIN/VAT:</span> {invoiceData.organization.taxId}</p>}
+                  {invoiceData.organization.cin && <p><span className="font-semibold">CIN:</span> {invoiceData.organization.cin}</p>}
+                  {invoiceData.organization.pan && <p><span className="font-semibold">PAN:</span> {invoiceData.organization.pan}</p>}
                 </div>
-              )}
-              {templateDef.customer.showShipTo && invoiceData.shipTo && (
-                <div className="flex-1">
-                  <h5 style={{ color: themeColors.primary }} className="font-bold text-[10px] uppercase tracking-wider mb-1.5">{templateDef.customer.shipToHeading}</h5>
-                  <p className="font-bold text-on-surface">{invoiceData.shipTo.name}</p>
-                  {invoiceData.shipTo.lines.map((ln, i) => <p key={i} className="text-on-surface-variant/80 text-[11px] leading-snug">{ln}</p>)}
-                </div>
-              )}
+              </div>
             </div>
 
             {/* Table Line Items */}
@@ -366,7 +394,7 @@ export default function TemplateDesignerWorkspacePage() {
             </div>
 
             {/* Totals & Notes bottom grid */}
-            <div className="grid grid-cols-12 gap-6 mt-4 z-10">
+            <div className="grid grid-cols-12 gap-6 mt-4 mb-6 z-10">
               <div className="col-span-7">
                 {templateDef.notes.show && (invoiceData.notes || templateDef.notes.text) && (
                   <div>
@@ -399,53 +427,94 @@ export default function TemplateDesignerWorkspacePage() {
               </div>
             </div>
 
-            {/* Payment & Bank instructions details */}
-            <div className="grid grid-cols-2 gap-8 border-t border-outline-variant/40 pt-4 mt-8 z-10 text-[10px] leading-tight">
-              {templateDef.payment.show && (
-                <div>
-                  <h6 style={{ color: themeColors.primary }} className="font-bold text-[9px] uppercase tracking-wider mb-1">{templateDef.payment.heading}</h6>
-                  <p className="text-on-surface-variant/80">{templateDef.payment.instructions}</p>
-                </div>
-              )}
-              {templateDef.bank.show && invoiceData.bank && (
-                <div>
-                  <h6 style={{ color: themeColors.primary }} className="font-bold text-[9px] uppercase tracking-wider mb-1">{templateDef.bank.heading}</h6>
-                  {templateDef.bank.fields.map(f => {
-                    if (!f.visible) return null;
-                    let txt = '';
-                    if (f.key === 'bankName') txt = invoiceData.bank?.bankName || '';
-                    else if (f.key === 'accountHolder') txt = invoiceData.bank?.accountHolder || '';
-                    else if (f.key === 'accountNumber') txt = invoiceData.bank?.accountNumber || '';
-                    else if (f.key === 'iban') txt = invoiceData.bank?.iban || '';
-                    else if (f.key === 'bic') txt = invoiceData.bank?.bic || '';
-
-                    if (!txt) return null;
+            {/* Movable Footer Blocks */}
+            <div className="mt-auto space-y-6 z-10">
+              {[...(templateDef.footerBlocks || [])]
+                .sort((a, b) => a.order - b.order)
+                .map(block => {
+                  if (!block.visible) return null;
+                  
+                  if (block.key === 'payment' && templateDef.payment.show && templateDef.payment.instructions) {
                     return (
-                      <p key={f.key} className="text-on-surface-variant/80 mb-0.5">
-                        <strong className="font-semibold text-on-surface">{f.label}:</strong> {txt}
-                      </p>
+                      <div key={block.key} className="border-t border-outline-variant/40 pt-4 text-[10px] leading-relaxed">
+                        <h6 style={{ color: themeColors.primary }} className="font-bold text-[9px] uppercase tracking-wider mb-1">{templateDef.payment.heading}</h6>
+                        <p className="text-on-surface-variant/80">{templateDef.payment.instructions}</p>
+                      </div>
                     );
-                  })}
-                </div>
-              )}
+                  }
+                  
+                  if (block.key === 'bank' && templateDef.bank.show && invoiceData.bank) {
+                    return (
+                      <div key={block.key} className="border-t border-outline-variant/40 pt-4 text-[10px] leading-relaxed">
+                        <h6 style={{ color: themeColors.primary }} className="font-bold text-[9px] uppercase tracking-wider mb-1">{templateDef.bank.heading}</h6>
+                        <div className="grid grid-cols-2 gap-2 mt-1">
+                          {templateDef.bank.fields.map(f => {
+                            if (!f.visible) return null;
+                            let txt = '';
+                            if (f.key === 'bankName') txt = invoiceData.bank?.bankName || '';
+                            else if (f.key === 'accountHolder') txt = invoiceData.bank?.accountHolder || '';
+                            else if (f.key === 'accountNumber') txt = invoiceData.bank?.accountNumber || '';
+                            else if (f.key === 'iban') txt = invoiceData.bank?.iban || '';
+                            else if (f.key === 'bic') txt = invoiceData.bank?.bic || '';
+                            if (!txt) return null;
+                            return (
+                              <p key={f.key} className="text-on-surface-variant/80">
+                                <strong className="font-semibold text-on-surface">{f.label}:</strong> {txt}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (block.key === 'qr' && invoiceData.qrUrl) {
+                    return (
+                      <div key={block.key} className="pt-2">
+                        <img 
+                          src={invoiceData.qrUrl} 
+                          alt="QR Code" 
+                          className="w-20 h-20 object-contain border border-outline-variant rounded p-1"
+                        />
+                      </div>
+                    );
+                  }
+
+                  if (block.key === 'signature' && templateDef.signature.show) {
+                    return (
+                      <div key={block.key} className="pt-6 text-right text-[10px]">
+                        {invoiceData.signatureUrl ? (
+                          <div className="inline-block text-center space-y-1">
+                            <img 
+                              src={invoiceData.signatureUrl} 
+                              alt="Signature" 
+                              className="h-10 object-contain mx-auto"
+                            />
+                            <div className="border-t border-outline-variant w-40 inline-block"></div>
+                            <p className="font-bold text-on-surface mt-1 pr-6">{templateDef.signature.label}</p>
+                          </div>
+                        ) : (
+                          <div className="inline-block">
+                            <div className="border-t border-outline-variant w-40 inline-block"></div>
+                            <p className="font-bold text-on-surface mt-1 pr-6">{templateDef.signature.label}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (block.key === 'footer' && templateDef.footer.show) {
+                    return (
+                      <div key={block.key} className="pt-2 border-t border-outline-variant/30 text-[9px] text-on-surface-variant/70 text-center flex justify-between">
+                        <span>{templateDef.footer.text}</span>
+                        {templateDef.footer.showPageNumbers && <span>Page 1 of 1</span>}
+                      </div>
+                    );
+                  }
+
+                  return null;
+                })}
             </div>
-
-            {/* Signature Area */}
-            {templateDef.signature.show && (
-              <div className="mt-auto pt-10 self-end text-right z-10 text-[10px]">
-                <div className="border-t border-outline-variant w-40 inline-block"></div>
-                <p className="font-bold text-on-surface mt-1 pr-6">{templateDef.signature.label}</p>
-              </div>
-            )}
-
-            {/* Footer */}
-            {templateDef.footer.show && (
-              <div className="mt-12 pt-2 border-t border-outline-variant/30 text-[9px] text-on-surface-variant/70 text-center flex justify-between z-10">
-                <span>{templateDef.footer.text}</span>
-                {templateDef.footer.showPageNumbers && <span>Page 1 of 1</span>}
-              </div>
-            )}
-
           </div>
         </section>
 
@@ -473,52 +542,103 @@ export default function TemplateDesignerWorkspacePage() {
             {/* PAGE CONFIG PANEL */}
             {activePanel === 'page' && (
               <div className="space-y-4">
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Page Format Size</label>
-                  <select
-                    value={templateDef.page.size}
-                    onChange={(e) => updateNestedConfig('page', 'size', e.target.value)}
-                    className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm text-on-surface font-semibold focus:outline-none"
-                  >
-                    <option value="A4">A4 (International)</option>
-                    <option value="LETTER">US Letter Size</option>
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Page Orientation</label>
-                  <select
-                    value={templateDef.page.orientation}
-                    onChange={(e) => updateNestedConfig('page', 'orientation', e.target.value)}
-                    className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm text-on-surface font-semibold focus:outline-none"
-                  >
-                    <option value="portrait">Portrait</option>
-                    <option value="landscape">Landscape</option>
-                  </select>
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">description</span>
+                      Page Layout
+                    </span>
+                    <button
+                      onClick={() => {
+                        updateNestedConfig('page', 'size', 'A4');
+                        updateNestedConfig('page', 'orientation', 'portrait');
+                      }}
+                      className="text-[10px] text-primary hover:text-primary-fixed-variant font-bold uppercase transition-colors"
+                    >
+                      Reset Page
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-on-surface-variant font-bold uppercase">Page Format Size</label>
+                    <select
+                      value={templateDef.page.size}
+                      onChange={(e) => updateNestedConfig('page', 'size', e.target.value)}
+                      className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm text-on-surface font-semibold focus:outline-none"
+                    >
+                      <option value="A4">A4 (International)</option>
+                      <option value="LETTER">US Letter Size</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-on-surface-variant font-bold uppercase">Page Orientation</label>
+                    <select
+                      value={templateDef.page.orientation}
+                      onChange={(e) => updateNestedConfig('page', 'orientation', e.target.value)}
+                      className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm text-on-surface font-semibold focus:outline-none"
+                    >
+                      <option value="portrait">Portrait</option>
+                      <option value="landscape">Landscape</option>
+                    </select>
+                  </div>
                 </div>
                 
-                {/* Margins */}
-                <div className="space-y-2.5">
-                  <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Margins Spacings (pt)</span>
-                  {['top', 'right', 'bottom', 'left'].map(side => (
-                    <div key={side} className="flex justify-between items-center gap-2 text-body-sm font-semibold">
-                      <span className="capitalize w-12 text-on-surface-variant">{side}</span>
-                      <input 
-                        type="range"
-                        min="10"
-                        max="80"
-                        value={(templateDef.page.margins as any)[side]}
-                        onChange={(e) => {
-                          const val = Number(e.target.value) || 20;
-                          updateNestedConfig('page', 'margins', {
-                            ...templateDef.page.margins,
-                            [side]: val,
-                          });
-                        }}
-                        className="flex-1 accent-primary h-1 bg-surface-variant rounded appearance-none cursor-pointer"
-                      />
-                      <span className="font-mono text-primary w-10 text-right">{(templateDef.page.margins as any)[side]}pt</span>
-                    </div>
-                  ))}
+                {/* Margins Card */}
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">margin</span>
+                      Margin Spacing (pt)
+                    </span>
+                    <button
+                      onClick={() => {
+                        updateNestedConfig('page', 'margins', { top: 36, right: 36, bottom: 36, left: 36 });
+                      }}
+                      className="text-[10px] text-primary hover:text-primary-fixed-variant font-bold uppercase transition-colors"
+                    >
+                      Reset Margins
+                    </button>
+                  </div>
+                  <div className="space-y-3.5">
+                    {['top', 'right', 'bottom', 'left'].map(side => (
+                      <div key={side} className="flex flex-col gap-1">
+                        <div className="flex justify-between items-center text-[11px] font-semibold text-on-surface-variant">
+                          <span className="capitalize">{side}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input 
+                            type="range"
+                            min="10"
+                            max="80"
+                            value={(templateDef.page.margins as any)[side]}
+                            onChange={(e) => {
+                              const val = Number(e.target.value) || 20;
+                              updateNestedConfig('page', 'margins', {
+                                ...templateDef.page.margins,
+                                [side]: val,
+                              });
+                            }}
+                            className="flex-1 accent-primary h-1 bg-surface-variant rounded-lg appearance-none cursor-pointer"
+                          />
+                          <input
+                            type="number"
+                            min="10"
+                            max="80"
+                            value={(templateDef.page.margins as any)[side]}
+                            onChange={(e) => {
+                              let val = Number(e.target.value);
+                              if (isNaN(val)) val = 10;
+                              val = Math.max(10, Math.min(80, val));
+                              updateNestedConfig('page', 'margins', {
+                                ...templateDef.page.margins,
+                                [side]: val,
+                              });
+                            }}
+                            className="w-14 h-7 px-1.5 border border-outline-variant rounded bg-surface-container-low text-center text-body-sm text-on-surface font-mono focus:outline-none focus:border-primary transition-colors"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -526,9 +646,34 @@ export default function TemplateDesignerWorkspacePage() {
             {/* THEME CONFIG PANEL */}
             {activePanel === 'theme' && (
               <div className="space-y-4">
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Primary Theme Accent</span>
-                  <div className="flex gap-2.5">
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">palette</span>
+                      Theme Color Accent
+                    </span>
+                    <button
+                      onClick={() => {
+                        setTemplateDef({
+                          ...templateDef,
+                          theme: {
+                            ...templateDef.theme,
+                            colors: {
+                              ...templateDef.theme.colors,
+                              primary: '#3525CD',
+                              tableHeaderBg: '#3525CD15',
+                              tableHeaderText: '#3525CD',
+                              zebraBg: '#3525CD05',
+                            },
+                          },
+                        });
+                      }}
+                      className="text-[10px] text-primary hover:text-primary-fixed-variant font-bold uppercase transition-colors"
+                    >
+                      Reset Color
+                    </button>
+                  </div>
+                  <div className="flex gap-2.5 flex-wrap">
                     {['#3525CD', '#0D9488', '#16a34a', '#d97706', '#dc2626', '#1e293b'].map(color => (
                       <button
                         key={color}
@@ -548,53 +693,102 @@ export default function TemplateDesignerWorkspacePage() {
                           });
                         }}
                         style={{ backgroundColor: color }}
-                        className={`w-7 h-7 rounded-full border-2 transition-transform cursor-pointer
+                        className={`w-7 h-7 rounded-full border-2 transition-transform cursor-pointer hover:scale-105
                           ${themeColors.primary === color ? 'border-on-surface scale-110 shadow-xs' : 'border-transparent'}`}
                       />
                     ))}
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Fonts Typography Preset</label>
-                  <select
-                    value={templateDef.theme.fonts.body}
-                    onChange={(e) => {
-                      const f = e.target.value;
-                      const isMono = f === 'Courier';
-                      const isSerif = f === 'Georgia';
-                      setTemplateDef({
-                        ...templateDef,
-                        theme: {
-                          ...templateDef.theme,
-                          fonts: {
-                            heading: isMono ? 'Courier-Bold' : isSerif ? 'Georgia-Bold' : 'Helvetica-Bold',
-                            body: f,
-                            mono: 'Courier',
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">text_fields</span>
+                      Typography Preset
+                    </span>
+                    <button
+                      onClick={() => {
+                        setTemplateDef({
+                          ...templateDef,
+                          theme: {
+                            ...templateDef.theme,
+                            fonts: {
+                              heading: 'Helvetica-Bold',
+                              body: 'Helvetica',
+                              mono: 'Courier',
+                            },
                           },
-                        },
-                      });
-                    }}
-                    className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm text-on-surface font-semibold focus:outline-none"
-                  >
-                    <option value="Helvetica">Helvetica (Modern Sans)</option>
-                    <option value="Georgia">Georgia (Classic Serif)</option>
-                    <option value="Courier">Courier (Monospace Code)</option>
-                  </select>
+                        });
+                      }}
+                      className="text-[10px] text-primary hover:text-primary-fixed-variant font-bold uppercase transition-colors"
+                    >
+                      Reset Font
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-on-surface-variant font-bold uppercase">Fonts Typography Preset</label>
+                    <select
+                      value={templateDef.theme.fonts.body}
+                      onChange={(e) => {
+                        const f = e.target.value;
+                        const isMono = f === 'Courier';
+                        const isSerif = f === 'Georgia';
+                        setTemplateDef({
+                          ...templateDef,
+                          theme: {
+                            ...templateDef.theme,
+                            fonts: {
+                              heading: isMono ? 'Courier-Bold' : isSerif ? 'Georgia-Bold' : 'Helvetica-Bold',
+                              body: f,
+                              mono: 'Courier',
+                            },
+                          },
+                        });
+                      }}
+                      className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm text-on-surface font-semibold focus:outline-none"
+                    >
+                      <option value="Helvetica">Helvetica (Modern Sans)</option>
+                      <option value="Georgia">Georgia (Classic Serif)</option>
+                      <option value="Courier">Courier (Monospace Code)</option>
+                    </select>
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Base font size</label>
-                  <div className="flex gap-2 items-center font-mono">
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">text_fields</span>
+                      Base Font Size (pt)
+                    </span>
+                    <button
+                      onClick={() => updateNestedConfig('theme', 'baseFontSize', 10)}
+                      className="text-[10px] text-primary hover:text-primary-fixed-variant font-bold uppercase transition-colors"
+                    >
+                      Reset Size
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-3">
                     <input 
                       type="range"
                       min="8"
-                      max="14"
+                      max="16"
                       value={templateDef.theme.baseFontSize}
                       onChange={(e) => updateNestedConfig('theme', 'baseFontSize', Number(e.target.value) || 10)}
-                      className="flex-1 accent-primary h-1 bg-surface-variant rounded appearance-none cursor-pointer"
+                      className="flex-1 accent-primary h-1 bg-surface-variant rounded-lg appearance-none cursor-pointer"
                     />
-                    <span className="text-primary font-bold">{templateDef.theme.baseFontSize}pt</span>
+                    <input
+                      type="number"
+                      min="8"
+                      max="16"
+                      value={templateDef.theme.baseFontSize}
+                      onChange={(e) => {
+                        let val = Number(e.target.value);
+                        if (isNaN(val)) val = 8;
+                        val = Math.max(8, Math.min(16, val));
+                        updateNestedConfig('theme', 'baseFontSize', val);
+                      }}
+                      className="w-14 h-7 px-1.5 border border-outline-variant rounded bg-surface-container-low text-center text-body-sm text-on-surface font-mono focus:outline-none focus:border-primary transition-colors"
+                    />
                   </div>
                 </div>
               </div>
@@ -603,153 +797,263 @@ export default function TemplateDesignerWorkspacePage() {
             {/* LOGO CONFIG PANEL */}
             {activePanel === 'logo' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between text-body-sm font-semibold">
-                  <span>Display Branding Logo</span>
-                  <input
-                    type="checkbox"
-                    checked={templateDef.logo.enabled}
-                    onChange={(e) => updateNestedConfig('logo', 'enabled', e.target.checked)}
-                    className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
-                  />
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">image</span>
+                      Branding Logo
+                    </span>
+                    <button
+                      onClick={() => {
+                        setTemplateDef({
+                          ...templateDef,
+                          logo: {
+                            enabled: true,
+                            position: 'left',
+                            maxWidth: 120,
+                            maxHeight: 50,
+                            source: 'branding',
+                          },
+                        });
+                      }}
+                      className="text-[10px] text-primary hover:text-primary-fixed-variant font-bold uppercase transition-colors"
+                    >
+                      Reset Logo
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-body-sm font-semibold">
+                    <span>Display Branding Logo</span>
+                    <input
+                      type="checkbox"
+                      checked={templateDef.logo.enabled}
+                      onChange={(e) => updateNestedConfig('logo', 'enabled', e.target.checked)}
+                      className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
+                    />
+                  </div>
+                  {templateDef.logo.enabled && (
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-on-surface-variant font-bold uppercase">Logo Align Position</label>
+                        <select
+                          value={templateDef.logo.position}
+                          onChange={(e) => updateNestedConfig('logo', 'position', e.target.value)}
+                          className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm text-on-surface font-semibold focus:outline-none"
+                        >
+                          <option value="left">Left Align</option>
+                          <option value="center">Center Align</option>
+                          <option value="right">Right Align</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-on-surface-variant font-bold uppercase">Max Width</label>
+                        <input
+                          type="number"
+                          value={templateDef.logo.maxWidth}
+                          onChange={(e) => updateNestedConfig('logo', 'maxWidth', Number(e.target.value) || 120)}
+                          className="w-full px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
-                {templateDef.logo.enabled && (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Logo Align Position</label>
-                      <select
-                        value={templateDef.logo.position}
-                        onChange={(e) => updateNestedConfig('logo', 'position', e.target.value)}
-                        className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm text-on-surface font-semibold focus:outline-none"
-                      >
-                        <option value="left">Left Align</option>
-                        <option value="center">Center Align</option>
-                        <option value="right">Right Align</option>
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Max Width</label>
-                      <input
-                        type="number"
-                        value={templateDef.logo.maxWidth}
-                        onChange={(e) => updateNestedConfig('logo', 'maxWidth', Number(e.target.value) || 120)}
-                        className="w-full px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none"
-                      />
-                    </div>
-                  </>
-                )}
               </div>
             )}
 
             {/* HEADER CONFIG PANEL */}
             {activePanel === 'header' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between text-body-sm font-semibold">
-                  <span>Show Header Title</span>
-                  <input
-                    type="checkbox"
-                    checked={templateDef.header.showTitle}
-                    onChange={(e) => updateNestedConfig('header', 'showTitle', e.target.checked)}
-                    className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
-                  />
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">top_panel_open</span>
+                      Document Header
+                    </span>
+                    <button
+                      onClick={() => {
+                        setTemplateDef({
+                          ...templateDef,
+                          header: {
+                            showTitle: true,
+                            titleText: '{document.type}',
+                            showDocMeta: true,
+                            accentBar: true,
+                          },
+                        });
+                      }}
+                      className="text-[10px] text-primary hover:text-primary-fixed-variant font-bold uppercase transition-colors"
+                    >
+                      Reset Header
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-body-sm font-semibold">
+                    <span>Show Header Title</span>
+                    <input
+                      type="checkbox"
+                      checked={templateDef.header.showTitle}
+                      onChange={(e) => updateNestedConfig('header', 'showTitle', e.target.checked)}
+                      className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
+                    />
+                  </div>
+                  {templateDef.header.showTitle && (
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-on-surface-variant font-bold uppercase">Header Title Template</label>
+                        <input
+                          type="text"
+                          value={templateDef.header.titleText}
+                          onChange={(e) => updateNestedConfig('header', 'titleText', e.target.value)}
+                          placeholder="e.g. {document.type}"
+                          className="w-full px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none font-semibold"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-body-sm font-semibold">
+                        <span>Colored Accent Bar</span>
+                        <input
+                          type="checkbox"
+                          checked={templateDef.header.accentBar}
+                          onChange={(e) => updateNestedConfig('header', 'accentBar', e.target.checked)}
+                          className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
-                {templateDef.header.showTitle && (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Header Title Template</label>
-                      <input
-                        type="text"
-                        value={templateDef.header.titleText}
-                        onChange={(e) => updateNestedConfig('header', 'titleText', e.target.value)}
-                        placeholder="e.g. {document.type}"
-                        className="w-full px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none font-semibold"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-body-sm font-semibold">
-                      <span>Colored Accent Bar</span>
-                      <input
-                        type="checkbox"
-                        checked={templateDef.header.accentBar}
-                        onChange={(e) => updateNestedConfig('header', 'accentBar', e.target.checked)}
-                        className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
-                      />
-                    </div>
-                  </>
-                )}
               </div>
             )}
 
             {/* TABLE COLUMNS CONFIG PANEL */}
             {activePanel === 'table' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between text-body-sm font-semibold">
-                  <span>Zebra Grid BG Rows</span>
-                  <input
-                    type="checkbox"
-                    checked={templateDef.table.zebra}
-                    onChange={(e) => updateNestedConfig('table', 'zebra', e.target.checked)}
-                    className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
-                  />
-                </div>
-                <div className="flex items-center justify-between text-body-sm font-semibold">
-                  <span>Show Table Cell Borders</span>
-                  <input
-                    type="checkbox"
-                    checked={templateDef.table.showBorders}
-                    onChange={(e) => updateNestedConfig('table', 'showBorders', e.target.checked)}
-                    className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
-                  />
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">table_chart</span>
+                      Line Items Options
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-body-sm font-semibold">
+                    <span>Zebra Grid BG Rows</span>
+                    <input
+                      type="checkbox"
+                      checked={templateDef.table.zebra}
+                      onChange={(e) => updateNestedConfig('table', 'zebra', e.target.checked)}
+                      className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-body-sm font-semibold">
+                    <span>Show Table Cell Borders</span>
+                    <input
+                      type="checkbox"
+                      checked={templateDef.table.showBorders}
+                      onChange={(e) => updateNestedConfig('table', 'showBorders', e.target.checked)}
+                      className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
+                    />
+                  </div>
                 </div>
 
-                <div className="h-px bg-outline-variant/60 w-full"></div>
-                <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Columns Options</span>
-                
-                <div className="space-y-3.5">
-                  {sortedColumns.map((col, idx) => (
-                    <div key={col.key} className="border border-outline-variant/50 rounded-lg p-2.5 space-y-2 bg-surface-container-lowest shadow-xs text-[11px] font-semibold">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-on-surface capitalize">{col.key} Column</span>
-                        <input
-                          type="checkbox"
-                          checked={col.visible}
-                          onChange={(e) => {
-                            const newCols = templateDef.table.columns.map(c => c.key === col.key ? { ...c, visible: e.target.checked } : c);
-                            updateNestedConfig('table', 'columns', newCols);
-                          }}
-                          className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
-                        />
-                      </div>
-                      {col.visible && (
-                        <div className="grid grid-cols-2 gap-2 text-body-sm">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[9px] text-on-surface-variant uppercase font-bold">Label</span>
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">view_week</span>
+                      Columns Configurations
+                    </span>
+                    <button
+                      onClick={() => {
+                        const newKey = `col_${Date.now()}`;
+                        const newCol = {
+                          key: newKey,
+                          label: 'New Column',
+                          visible: true,
+                          width: 15,
+                          align: 'left',
+                          order: templateDef.table.columns.length
+                        };
+                        const newCols = [...templateDef.table.columns, newCol];
+                        updateNestedConfig('table', 'columns', newCols);
+                      }}
+                      className="text-[10px] text-primary font-bold flex items-center gap-0.5 hover:underline cursor-pointer bg-transparent border-none"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">add</span> Add
+                    </button>
+                  </div>
+                  <div className="space-y-3.5">
+                    {sortedColumns.map((col, idx) => (
+                      <div key={col.key} className="border border-outline-variant/50 rounded-lg p-2.5 space-y-2 bg-surface-container-lowest shadow-xs text-[11px] font-semibold">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-1">
                             <input
-                              type="text"
-                              value={col.label}
+                              type="checkbox"
+                              checked={col.visible}
                               onChange={(e) => {
-                                const newCols = templateDef.table.columns.map(c => c.key === col.key ? { ...c, label: e.target.value } : c);
+                                const newCols = templateDef.table.columns.map(c => c.key === col.key ? { ...c, visible: e.target.checked } : c);
                                 updateNestedConfig('table', 'columns', newCols);
                               }}
-                              className="px-1.5 py-0.8 bg-surface-container-low border border-outline-variant rounded focus:outline-none"
+                              className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
                             />
+                            <span className="font-bold text-on-surface truncate max-w-[120px]">{col.label || col.key}</span>
                           </div>
-                          <div className="flex flex-col gap-0.5 font-mono">
-                            <span className="text-[9px] text-on-surface-variant uppercase font-bold">Width: {col.width}%</span>
-                            <input
-                              type="range"
-                              min="5"
-                              max="70"
-                              value={col.width}
-                              onChange={(e) => {
-                                const newCols = templateDef.table.columns.map(c => c.key === col.key ? { ...c, width: Number(e.target.value) || 10 } : c);
-                                updateNestedConfig('table', 'columns', newCols);
-                              }}
-                              className="w-full accent-primary h-1 bg-surface-variant rounded appearance-none cursor-pointer"
-                            />
-                          </div>
+                          
+                          <button
+                            onClick={() => {
+                              const newCols = templateDef.table.columns.filter(c => c.key !== col.key);
+                              updateNestedConfig('table', 'columns', newCols);
+                            }}
+                            className="text-on-surface-variant hover:text-error cursor-pointer bg-transparent border-none"
+                            title="Delete Column"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">delete</span>
+                          </button>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        {col.visible && (
+                          <div className="space-y-2 text-body-sm mt-1">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[9px] text-on-surface-variant uppercase font-bold">Rename Label</span>
+                                <input
+                                  type="text"
+                                  value={col.label}
+                                  onChange={(e) => {
+                                    const newCols = templateDef.table.columns.map(c => c.key === col.key ? { ...c, label: e.target.value } : c);
+                                    updateNestedConfig('table', 'columns', newCols);
+                                  }}
+                                  className="px-1.5 py-0.8 bg-surface-container-low border border-outline-variant rounded focus:outline-none"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[9px] text-on-surface-variant uppercase font-bold">Align</span>
+                                <select
+                                  value={col.align || 'left'}
+                                  onChange={(e) => {
+                                    const newCols = templateDef.table.columns.map(c => c.key === col.key ? { ...c, align: e.target.value } : c);
+                                    updateNestedConfig('table', 'columns', newCols);
+                                  }}
+                                  className="px-1.5 py-0.8 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[11px] text-on-surface font-semibold cursor-pointer"
+                                >
+                                  <option value="left">Left</option>
+                                  <option value="center">Center</option>
+                                  <option value="right">Right</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-0.5 font-mono">
+                              <span className="text-[9px] text-on-surface-variant uppercase font-bold">Width: {col.width}%</span>
+                              <input
+                                type="range"
+                                min="5"
+                                max="70"
+                                value={col.width}
+                                onChange={(e) => {
+                                  const newCols = templateDef.table.columns.map(c => c.key === col.key ? { ...c, width: Number(e.target.value) || 10 } : c);
+                                  updateNestedConfig('table', 'columns', newCols);
+                                }}
+                                className="w-full accent-primary h-1 bg-surface-variant rounded appearance-none cursor-pointer"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -757,31 +1061,38 @@ export default function TemplateDesignerWorkspacePage() {
             {/* TOTALS CONFIG PANEL */}
             {activePanel === 'totals' && (
               <div className="space-y-4">
-                <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Totals visibility & Labels</span>
-                <div className="space-y-2.5">
-                  {sortedTotals.map(row => (
-                    <div key={row.key} className="flex justify-between items-center gap-2 text-body-sm font-semibold">
-                      <input
-                        type="checkbox"
-                        checked={row.visible}
-                        onChange={(e) => {
-                          const newRows = templateDef.totals.rows.map(r => r.key === row.key ? { ...r, visible: e.target.checked } : r);
-                          updateNestedConfig('totals', 'rows', newRows);
-                        }}
-                        className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
-                      />
-                      <input
-                        type="text"
-                        value={row.label}
-                        onChange={(e) => {
-                          const newRows = templateDef.totals.rows.map(r => r.key === row.key ? { ...r, label: e.target.value } : r);
-                          updateNestedConfig('totals', 'rows', newRows);
-                        }}
-                        className="flex-1 px-2 py-1 bg-surface-container-low border border-outline-variant rounded focus:outline-none"
-                        disabled={!row.visible}
-                      />
-                    </div>
-                  ))}
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">price_check</span>
+                      Totals Layout Rows
+                    </span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {sortedTotals.map(row => (
+                      <div key={row.key} className="flex justify-between items-center gap-2 text-body-sm font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={row.visible}
+                          onChange={(e) => {
+                            const newRows = templateDef.totals.rows.map(r => r.key === row.key ? { ...r, visible: e.target.checked } : r);
+                            updateNestedConfig('totals', 'rows', newRows);
+                          }}
+                          className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                        />
+                        <input
+                          type="text"
+                          value={row.label}
+                          onChange={(e) => {
+                            const newRows = templateDef.totals.rows.map(r => r.key === row.key ? { ...r, label: e.target.value } : r);
+                            updateNestedConfig('totals', 'rows', newRows);
+                          }}
+                          className="flex-1 px-2 py-1 bg-surface-container-low border border-outline-variant rounded focus:outline-none"
+                          disabled={!row.visible}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -789,126 +1100,197 @@ export default function TemplateDesignerWorkspacePage() {
             {/* BANK DETAILS PANEL */}
             {activePanel === 'bank' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between text-body-sm font-semibold">
-                  <span>Display Bank Transfer Details</span>
-                  <input
-                    type="checkbox"
-                    checked={templateDef.bank.show}
-                    onChange={(e) => updateNestedConfig('bank', 'show', e.target.checked)}
-                    className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
-                  />
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">account_balance</span>
+                      Bank Transfer Details
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-body-sm font-semibold">
+                    <span>Display Bank Transfer Details</span>
+                    <input
+                      type="checkbox"
+                      checked={templateDef.bank.show}
+                      onChange={(e) => updateNestedConfig('bank', 'show', e.target.checked)}
+                      className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
+                    />
+                  </div>
+                  {templateDef.bank.show && (
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-on-surface-variant font-bold uppercase">Block Heading</label>
+                        <input
+                          type="text"
+                          value={templateDef.bank.heading}
+                          onChange={(e) => updateNestedConfig('bank', 'heading', e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none font-semibold"
+                        />
+                      </div>
+                      
+                      <span className="text-[10px] text-on-surface-variant font-bold uppercase block mt-2">Display Fields</span>
+                      <div className="space-y-2">
+                        {templateDef.bank.fields.map(f => (
+                          <div key={f.key} className="flex justify-between items-center font-semibold text-body-sm">
+                            <span className="capitalize">{f.key.replace('bankName', 'Bank').replace('account', 'Account')}</span>
+                            <input
+                              type="checkbox"
+                              checked={f.visible}
+                              onChange={(e) => {
+                                const newF = templateDef.bank.fields.map(field => field.key === f.key ? { ...field, visible: e.target.checked } : field);
+                                updateNestedConfig('bank', 'fields', newF);
+                              }}
+                              className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
-                {templateDef.bank.show && (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Block Heading</label>
-                      <input
-                        type="text"
-                        value={templateDef.bank.heading}
-                        onChange={(e) => updateNestedConfig('bank', 'heading', e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none font-semibold"
-                      />
-                    </div>
-                    
-                    <span className="text-[10px] text-on-surface-variant font-bold uppercase block mt-2">Display Fields</span>
-                    <div className="space-y-2">
-                      {templateDef.bank.fields.map(f => (
-                        <div key={f.key} className="flex justify-between items-center font-semibold text-body-sm">
-                          <span className="capitalize">{f.key.replace('bankName', 'Bank').replace('account', 'Account')}</span>
-                          <input
-                            type="checkbox"
-                            checked={f.visible}
-                            onChange={(e) => {
-                              const newF = templateDef.bank.fields.map(field => field.key === f.key ? { ...field, visible: e.target.checked } : field);
-                              updateNestedConfig('bank', 'fields', newF);
-                            }}
-                            className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
               </div>
             )}
 
             {/* WATERMARK PANEL */}
             {activePanel === 'watermark' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between text-body-sm font-semibold">
-                  <span>Show Watermark Text</span>
-                  <input
-                    type="checkbox"
-                    checked={templateDef.watermark.enabled}
-                    onChange={(e) => updateNestedConfig('watermark', 'enabled', e.target.checked)}
-                    className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
-                  />
-                </div>
-                {templateDef.watermark.enabled && (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Watermark Text</label>
-                      <input
-                        type="text"
-                        value={templateDef.watermark.text}
-                        onChange={(e) => updateNestedConfig('watermark', 'text', e.target.value)}
-                        placeholder="DRAFT COPY"
-                        className="w-full px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none font-semibold"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Opacity</label>
-                      <div className="flex gap-2 items-center font-mono">
-                        <input 
-                          type="range"
-                          min="5"
-                          max="50"
-                          value={templateDef.watermark.opacity * 100}
-                          onChange={(e) => updateNestedConfig('watermark', 'opacity', (Number(e.target.value) || 10) / 100)}
-                          className="flex-1 accent-primary h-1 bg-surface-variant rounded appearance-none cursor-pointer"
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">approval</span>
+                      Watermark Stamp
+                    </span>
+                    <button
+                      onClick={() => {
+                        setTemplateDef({
+                          ...templateDef,
+                          watermark: {
+                            enabled: false,
+                            text: 'DRAFT COPY',
+                            opacity: 0.15,
+                            angle: 45,
+                          },
+                        });
+                      }}
+                      className="text-[10px] text-primary hover:text-primary-fixed-variant font-bold uppercase transition-colors"
+                    >
+                      Reset Watermark
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-body-sm font-semibold">
+                    <span>Show Watermark Text</span>
+                    <input
+                      type="checkbox"
+                      checked={templateDef.watermark.enabled}
+                      onChange={(e) => updateNestedConfig('watermark', 'enabled', e.target.checked)}
+                      className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
+                    />
+                  </div>
+                  {templateDef.watermark.enabled && (
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-on-surface-variant font-bold uppercase">Watermark Text</label>
+                        <input
+                          type="text"
+                          value={templateDef.watermark.text}
+                          onChange={(e) => updateNestedConfig('watermark', 'text', e.target.value)}
+                          placeholder="DRAFT COPY"
+                          className="w-full px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none font-semibold"
                         />
-                        <span className="text-primary font-bold">{Math.round(templateDef.watermark.opacity * 100)}%</span>
                       </div>
-                    </div>
-                  </>
-                )}
+                      
+                      {/* Opacity with synced inputs */}
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex justify-between items-center text-[10px] text-on-surface-variant font-bold uppercase">
+                          <span>Opacity (%)</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input 
+                            type="range"
+                            min="5"
+                            max="50"
+                            value={Math.round(templateDef.watermark.opacity * 100)}
+                            onChange={(e) => updateNestedConfig('watermark', 'opacity', (Number(e.target.value) || 10) / 100)}
+                            className="flex-1 accent-primary h-1 bg-surface-variant rounded-lg appearance-none cursor-pointer"
+                          />
+                          <input
+                            type="number"
+                            min="5"
+                            max="50"
+                            value={Math.round(templateDef.watermark.opacity * 100)}
+                            onChange={(e) => {
+                              let val = Number(e.target.value);
+                              if (isNaN(val)) val = 5;
+                              val = Math.max(5, Math.min(50, val));
+                              updateNestedConfig('watermark', 'opacity', val / 100);
+                            }}
+                            className="w-14 h-7 px-1.5 border border-outline-variant rounded bg-surface-container-low text-center text-body-sm text-on-surface font-mono focus:outline-none focus:border-primary transition-colors"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
             {/* FOOTER CONFIG PANEL */}
             {activePanel === 'footer' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between text-body-sm font-semibold">
-                  <span>Show Document Footer</span>
-                  <input
-                    type="checkbox"
-                    checked={templateDef.footer.show}
-                    onChange={(e) => updateNestedConfig('footer', 'show', e.target.checked)}
-                    className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
-                  />
+                <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
+                    <span className="font-semibold text-body-sm text-on-surface flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-primary">subtitles</span>
+                      Footer Details
+                    </span>
+                    <button
+                      onClick={() => {
+                        setTemplateDef({
+                          ...templateDef,
+                          footer: {
+                            show: true,
+                            text: 'Granth Infotech Private Limited — Services & Software Delivery Division',
+                            showPageNumbers: true,
+                          },
+                        });
+                      }}
+                      className="text-[10px] text-primary hover:text-primary-fixed-variant font-bold uppercase transition-colors"
+                    >
+                      Reset Footer
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-body-sm font-semibold">
+                    <span>Show Document Footer</span>
+                    <input
+                      type="checkbox"
+                      checked={templateDef.footer.show}
+                      onChange={(e) => updateNestedConfig('footer', 'show', e.target.checked)}
+                      className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
+                    />
+                  </div>
+                  {templateDef.footer.show && (
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-on-surface-variant font-bold uppercase">Footer Declaration Line</label>
+                        <textarea
+                          value={templateDef.footer.text}
+                          onChange={(e) => updateNestedConfig('footer', 'text', e.target.value)}
+                          rows={2}
+                          className="w-full p-2 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none font-semibold text-[11px]"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-body-sm font-semibold">
+                        <span>Display Page Numbers</span>
+                        <input
+                          type="checkbox"
+                          checked={templateDef.footer.showPageNumbers}
+                          onChange={(e) => updateNestedConfig('footer', 'showPageNumbers', e.target.checked)}
+                          className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
-                {templateDef.footer.show && (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Footer Declaration Line</label>
-                      <textarea
-                        value={templateDef.footer.text}
-                        onChange={(e) => updateNestedConfig('footer', 'text', e.target.value)}
-                        rows={2}
-                        className="w-full p-2 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none text-[11px]"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-body-sm font-semibold">
-                      <span>Display Page Numbers</span>
-                      <input
-                        type="checkbox"
-                        checked={templateDef.footer.showPageNumbers}
-                        onChange={(e) => updateNestedConfig('footer', 'showPageNumbers', e.target.checked)}
-                        className="rounded text-primary focus:ring-primary h-4.5 w-4.5 cursor-pointer"
-                      />
-                    </div>
-                  </>
-                )}
               </div>
             )}
 

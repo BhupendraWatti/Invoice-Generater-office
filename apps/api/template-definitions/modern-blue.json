@@ -191,10 +191,10 @@
     "columns": [
       {
         "key": "index",
-        "label": "#",
+        "label": "Sr no.",
         "visible": true,
-        "width": 5,
-        "align": "center",
+        "width": 8,
+        "align": "left",
         "order": 0
       },
       {
@@ -212,14 +212,6 @@
         "width": 10,
         "align": "right",
         "order": 2
-      },
-      {
-        "key": "rate",
-        "label": "Unit Rate",
-        "visible": true,
-        "width": 15,
-        "align": "right",
-        "order": 3
       },
       {
         "key": "tax",

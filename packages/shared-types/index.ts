@@ -635,6 +635,13 @@ export interface FooterConfig {
   showPageNumbers: boolean;
 }
 
+export interface FooterBlockConfig {
+  key: string; // 'payment' | 'bank' | 'qr' | 'signature' | 'footer'
+  label: string;
+  visible: boolean;
+  order: number;
+}
+
 export interface TemplateDefinitionDto {
   meta: TemplateMeta;
   page: PageConfig;
@@ -652,6 +659,7 @@ export interface TemplateDefinitionDto {
   signature: SignatureConfig;
   watermark: WatermarkConfig;
   footer: FooterConfig;
+  footerBlocks?: FooterBlockConfig[];
 }
 
 /** Partial template as persisted for a child template (only overrides + meta). */
@@ -673,6 +681,7 @@ export interface InvoiceLineItem {
   taxRate: number;
   taxAmount: number;
   amount: number; // quantity * rate
+  customFields?: any;
 }
 
 export interface InvoiceParty {
@@ -682,6 +691,9 @@ export interface InvoiceParty {
   gst?: string;
   email?: string;
   phone?: string;
+  website?: string;
+  cin?: string;
+  pan?: string;
 }
 
 export interface InvoiceData {

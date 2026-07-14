@@ -14,97 +14,108 @@ export class DocxRenderer implements InvoiceRenderer {
 
     const documentChildren: any[] = [];
 
-    // 0. Branding Logo
-    if (data.logoUrl) {
+    // ========================================================
+    // Redesigned Header: Left Column & Right Column Layout
+    // ========================================================
+    const leftColumnChildren: any[] = [];
+    const rightColumnChildren: any[] = [];
+
+    // LEFT COLUMN: Logo + Bill To
+    if (template.logo.enabled && data.logoUrl) {
       try {
         const base64Data = data.logoUrl.replace(/^data:image\/\w+;base64,/, '');
         const imgBuffer = Buffer.from(base64Data, 'base64');
-        documentChildren.push(
+        leftColumnChildren.push(
           new Paragraph({
             children: [
               new ImageRun({
                 data: imgBuffer,
-                transformation: { width: 140, height: 50 },
+                transformation: { width: 120, height: 45 },
                 type: 'png'
               })
             ],
-            spacing: { after: 200 }
+            spacing: { after: 120 }
           })
         );
       } catch (err) {
-        console.error('Failed to draw logo in docx:', err);
+        console.error('Failed to draw logo in DOCX:', err);
       }
     }
 
-    // 1. Header Title
+    if (template.customer.showBillTo) {
+      leftColumnChildren.push(
+        new Paragraph({
+          spacing: { before: 80, after: 60 },
+          children: [
+            new TextRun({
+              text: template.customer.billToHeading.toUpperCase(),
+              bold: true,
+              color: primaryColor,
+              size: (template.theme.baseFontSize - 1) * 2,
+            })
+          ]
+        })
+      );
+
+      const customerDetailsTexts: any[] = [];
+      if (data.billTo.name) {
+        customerDetailsTexts.push(
+          new TextRun({ text: data.billTo.name, bold: true, color: textColor })
+        );
+      }
+      data.billTo.lines.forEach(line => {
+        customerDetailsTexts.push(
+          new TextRun({ text: line, color: mutedColor, break: 1 })
+        );
+      });
+      if (data.billTo.phone) {
+        customerDetailsTexts.push(
+          new TextRun({ text: data.billTo.phone, color: mutedColor, break: 1 })
+        );
+      }
+      if (data.billTo.email) {
+        customerDetailsTexts.push(
+          new TextRun({ text: data.billTo.email, color: mutedColor, break: 1 })
+        );
+      }
+      if (data.billTo.taxId) {
+        customerDetailsTexts.push(
+          new TextRun({ text: data.billTo.taxId, color: mutedColor, break: 1 })
+        );
+      }
+
+      leftColumnChildren.push(
+        new Paragraph({
+          children: customerDetailsTexts,
+          spacing: { after: 120 }
+        })
+      );
+    }
+
+    // RIGHT COLUMN: Title, Meta, and Company Info
+    const rightXPercent = 50;
+    const rightWidth = 50;
+
     if (template.header.showTitle) {
       const titleText = replaceTokens(template.header.titleText, data);
-      documentChildren.push(
+      rightColumnChildren.push(
         new Paragraph({
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 200, after: 120 },
+          alignment: AlignmentType.RIGHT,
+          spacing: { after: 80 },
           children: [
             new TextRun({
               text: titleText.toUpperCase(),
               bold: true,
-              size: (template.theme.baseFontSize + 10) * 2,
+              size: (template.theme.baseFontSize + 12) * 2,
               color: primaryColor,
             }),
           ],
         })
       );
-
-      if (template.header.accentBar) {
-        documentChildren.push(
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: {
-              top: { style: BorderStyle.NONE },
-              left: { style: BorderStyle.NONE },
-              right: { style: BorderStyle.NONE },
-              bottom: { style: BorderStyle.SINGLE, size: 24, color: primaryColor },
-            },
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    children: [],
-                    shading: { fill: primaryColor },
-                  }),
-                ],
-              }),
-            ],
-          })
-        );
-        documentChildren.push(new Paragraph({ spacing: { after: 180 } }));
-      }
     }
 
-    // 2. Organization Info & Document Meta Row
-    const orgLines: any[] = [];
-    if (template.organization.showHeading) {
-      orgLines.push(new TextRun({ text: template.organization.heading, bold: true, color: primaryColor }));
-    }
-    
-    // Sort and filter organization fields
-    const sortedOrgFields = [...template.organization.fields].sort((a, b) => a.order - b.order);
-    sortedOrgFields.forEach(f => {
-      if (!f.visible) return;
-      if (f.key === 'name' && data.organization.name) {
-        orgLines.push(new TextRun({ text: data.organization.name, bold: true, color: textColor, break: orgLines.length > 0 ? 1 : 0 }));
-      } else if (f.key === 'addressLine1' && data.organization.lines[0]) {
-        orgLines.push(new TextRun({ text: data.organization.lines[0], color: mutedColor, break: 1 }));
-      } else if (f.key === 'addressLine2' && data.organization.lines[1]) {
-        orgLines.push(new TextRun({ text: data.organization.lines[1], color: mutedColor, break: 1 }));
-      } else if (f.key === 'city' && data.organization.lines[2]) {
-        orgLines.push(new TextRun({ text: data.organization.lines[2], color: mutedColor, break: 1 }));
-      } else if (f.key === 'taxId' && data.organization.taxId) {
-        orgLines.push(new TextRun({ text: `${f.label}: ${data.organization.taxId}`, color: mutedColor, break: 1 }));
-      }
-    });
-
-    const metaLines: any[] = [];
     if (template.documentDetails.show) {
+      const metaDetailsParagraphs: any[] = [];
       const sortedMetaFields = [...template.documentDetails.fields].sort((a, b) => a.order - b.order);
       sortedMetaFields.forEach(f => {
         if (!f.visible) return;
@@ -115,73 +126,60 @@ export class DocxRenderer implements InvoiceRenderer {
         else if (f.key === 'terms') textVal = 'Due on Receipt';
 
         if (textVal) {
-          metaLines.push(new TextRun({ text: `${f.label}: `, bold: true, color: textColor, break: metaLines.length > 0 ? 1 : 0 }));
-          metaLines.push(new TextRun({ text: textVal, color: textColor }));
+          metaDetailsParagraphs.push(
+            new TextRun({ text: `${f.label}: `, bold: true, color: textColor, break: metaDetailsParagraphs.length > 0 ? 1 : 0 }),
+            new TextRun({ text: textVal, color: textColor })
+          );
         }
       });
+      if (metaDetailsParagraphs.length > 0) {
+        rightColumnChildren.push(
+          new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            children: metaDetailsParagraphs,
+            spacing: { after: 100 }
+          })
+        );
+      }
     }
 
-    // Two-column layout for Org Details + Document Meta
-    const headerTable = new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: {
-        top: { style: BorderStyle.NONE },
-        left: { style: BorderStyle.NONE },
-        right: { style: BorderStyle.NONE },
-        bottom: { style: BorderStyle.NONE },
-      },
-      rows: [
-        new TableRow({
-          children: [
-            new TableCell({
-              width: { size: 60, type: WidthType.PERCENTAGE },
-              children: [new Paragraph({ children: orgLines })],
-            }),
-            new TableCell({
-              width: { size: 40, type: WidthType.PERCENTAGE },
-              children: [new Paragraph({ children: metaLines, alignment: AlignmentType.RIGHT })],
-            }),
-          ],
-        }),
-      ],
+    const companyInfoTexts: any[] = [];
+    companyInfoTexts.push(
+      new TextRun({ text: data.organization.name, bold: true, color: textColor })
+    );
+    data.organization.lines.forEach(line => {
+      companyInfoTexts.push(
+        new TextRun({ text: line, color: mutedColor, break: 1 })
+      );
     });
-    documentChildren.push(headerTable);
-    documentChildren.push(new Paragraph({ spacing: { after: 200 } }));
-
-    // 3. Bill To / Ship To Addresses Row
-    const billToLines: any[] = [];
-    if (template.customer.showBillTo) {
-      billToLines.push(new TextRun({ text: template.customer.billToHeading.toUpperCase(), bold: true, color: primaryColor }));
-      
-      const sortedCustFields = [...template.customer.fields].sort((a, b) => a.order - b.order);
-      sortedCustFields.forEach(f => {
-        if (!f.visible) return;
-        if (f.key === 'name' && data.billTo.name) {
-          billToLines.push(new TextRun({ text: data.billTo.name, bold: true, color: textColor, break: 1 }));
-        } else if (f.key === 'addressLine1' && data.billTo.lines[0]) {
-          billToLines.push(new TextRun({ text: data.billTo.lines[0], color: mutedColor, break: 1 }));
-        } else if (f.key === 'addressLine2' && data.billTo.lines[1]) {
-          billToLines.push(new TextRun({ text: data.billTo.lines[1], color: mutedColor, break: 1 }));
-        } else if (f.key === 'city' && data.billTo.lines[2]) {
-          billToLines.push(new TextRun({ text: data.billTo.lines[2], color: mutedColor, break: 1 }));
-        } else if (f.key === 'email' && data.billTo.email) {
-          billToLines.push(new TextRun({ text: data.billTo.email, color: mutedColor, break: 1 }));
-        } else if (f.key === 'phone' && data.billTo.phone) {
-          billToLines.push(new TextRun({ text: data.billTo.phone, color: mutedColor, break: 1 }));
-        }
-      });
+    if (data.organization.email) {
+      companyInfoTexts.push(new TextRun({ text: `Email: ${data.organization.email}`, color: mutedColor, break: 1 }));
+    }
+    if (data.organization.website) {
+      companyInfoTexts.push(new TextRun({ text: `Website: ${data.organization.website}`, color: mutedColor, break: 1 }));
+    }
+    if (data.organization.phone) {
+      companyInfoTexts.push(new TextRun({ text: `Phone: ${data.organization.phone}`, color: mutedColor, break: 1 }));
+    }
+    if (data.organization.taxId) {
+      companyInfoTexts.push(new TextRun({ text: `GSTIN/VAT: ${data.organization.taxId}`, color: mutedColor, break: 1 }));
+    }
+    if (data.organization.cin) {
+      companyInfoTexts.push(new TextRun({ text: `CIN: ${data.organization.cin}`, color: mutedColor, break: 1 }));
+    }
+    if (data.organization.pan) {
+      companyInfoTexts.push(new TextRun({ text: `PAN: ${data.organization.pan}`, color: mutedColor, break: 1 }));
     }
 
-    const shipToLines: any[] = [];
-    if (template.customer.showShipTo && data.shipTo) {
-      shipToLines.push(new TextRun({ text: template.customer.shipToHeading.toUpperCase(), bold: true, color: primaryColor }));
-      shipToLines.push(new TextRun({ text: data.shipTo.name, bold: true, color: textColor, break: 1 }));
-      data.shipTo.lines.forEach(ln => {
-        shipToLines.push(new TextRun({ text: ln, color: mutedColor, break: 1 }));
-      });
-    }
+    rightColumnChildren.push(
+      new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        children: companyInfoTexts,
+        spacing: { after: 120 }
+      })
+    );
 
-    const addressesTable = new Table({
+    const headerColumnsTable = new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
       borders: {
         top: { style: BorderStyle.NONE },
@@ -194,18 +192,18 @@ export class DocxRenderer implements InvoiceRenderer {
           children: [
             new TableCell({
               width: { size: 50, type: WidthType.PERCENTAGE },
-              children: [new Paragraph({ children: billToLines })],
+              children: leftColumnChildren,
             }),
             new TableCell({
               width: { size: 50, type: WidthType.PERCENTAGE },
-              children: [new Paragraph({ children: shipToLines })],
+              children: rightColumnChildren,
             }),
           ],
         }),
       ],
     });
-    documentChildren.push(addressesTable);
-    documentChildren.push(new Paragraph({ spacing: { after: 240 } }));
+    documentChildren.push(headerColumnsTable);
+    documentChildren.push(new Paragraph({ spacing: { after: 180 } }));
 
     // 4. Line Items Table
     const sortedColumns = [...template.table.columns]
@@ -218,7 +216,7 @@ export class DocxRenderer implements InvoiceRenderer {
       if (col.align === 'right') align = AlignmentType.RIGHT;
 
       return new TableCell({
-        width: { size: col.width, type: WidthType.PERCENTAGE },
+        width: { size: col.width || 10, type: WidthType.PERCENTAGE },
         shading: { fill: headerBgColor },
         children: [
           new Paragraph({
@@ -253,17 +251,18 @@ export class DocxRenderer implements InvoiceRenderer {
 
         let txt = '';
         if (col.key === 'index') txt = String(item.index);
-        else if (col.key === 'sku') txt = item.sku;
-        else if (col.key === 'description') txt = item.description;
+        else if (col.key === 'sku') txt = item.sku || '';
+        else if (col.key === 'description') txt = item.description || '';
         else if (col.key === 'type') txt = item.type || '';
-        else if (col.key === 'quantity') txt = String(item.quantity);
-        else if (col.key === 'unit') txt = item.unit;
-        else if (col.key === 'rate') txt = formatCurrency(item.rate, data.currencySymbol);
-        else if (col.key === 'tax') txt = item.taxLabel;
-        else if (col.key === 'amount') txt = formatCurrency(item.amount, data.currencySymbol);
+        else if (col.key === 'quantity') txt = String(item.quantity || 0);
+        else if (col.key === 'unit') txt = item.unit || 'PCS';
+        else if (col.key === 'rate') txt = formatCurrency(item.rate || 0, data.currencySymbol);
+        else if (col.key === 'tax') txt = item.taxLabel || 'EXEMPT';
+        else if (col.key === 'amount') txt = formatCurrency(item.amount || 0, data.currencySymbol);
+        else txt = String(item.customFields?.[col.key] || '');
 
         return new TableCell({
-          width: { size: col.width, type: WidthType.PERCENTAGE },
+          width: { size: col.width || 10, type: WidthType.PERCENTAGE },
           shading: { fill: rowFill },
           children: [
             new Paragraph({
@@ -350,8 +349,8 @@ export class DocxRenderer implements InvoiceRenderer {
 
     const notesLines: any[] = [];
     if (template.notes.show && (data.notes || template.notes.text)) {
-      notesLines.push(new TextRun({ text: template.notes.heading.toUpperCase(), bold: true, color: primaryColor }));
-      notesLines.push(new TextRun({ text: data.notes || template.notes.text, color: mutedColor, break: 1 }));
+      notesLines.push(new TextRun({ text: (template.notes.heading || 'Notes').toUpperCase(), bold: true, color: primaryColor }));
+      notesLines.push(new TextRun({ text: (data.notes || template.notes.text || ''), color: mutedColor, break: 1 }));
     }
 
     const summaryTable = new Table({
@@ -380,89 +379,153 @@ export class DocxRenderer implements InvoiceRenderer {
     documentChildren.push(summaryTable);
     documentChildren.push(new Paragraph({ spacing: { after: 200 } }));
 
-    // 6. Bank Details & Payment instructions
-    const paymentLines: any[] = [];
-    if (template.payment.show && template.payment.instructions) {
-      paymentLines.push(new TextRun({ text: template.payment.heading.toUpperCase(), bold: true, color: primaryColor }));
-      paymentLines.push(new TextRun({ text: template.payment.instructions, color: mutedColor, break: 1 }));
-    }
-    if (data.qrUrl) {
-      try {
-        const base64Data = data.qrUrl.replace(/^data:image\/\w+;base64,/, '');
-        const imgBuffer = Buffer.from(base64Data, 'base64');
-        paymentLines.push(new TextRun({ text: "", break: 2 }));
-        paymentLines.push(new ImageRun({
-          data: imgBuffer,
-          transformation: { width: 80, height: 80 },
-          type: 'png'
-        }));
-      } catch (err) {
-        console.error('Failed to draw QR in docx:', err);
-      }
-    }
+    // ========================================================
+    // 6. Movable Footer Blocks sequentially
+    // ========================================================
+    const footerBlocks = template.footerBlocks || [
+      { key: 'payment', label: 'Payment Instructions', visible: template.payment.show, order: 0 },
+      { key: 'bank', label: 'Bank Details', visible: template.bank.show, order: 1 },
+      { key: 'qr', label: 'QR Code', visible: true, order: 2 },
+      { key: 'signature', label: 'Signature', visible: template.signature.show, order: 3 },
+      { key: 'footer', label: 'Footer Declaration', visible: template.footer.show, order: 4 },
+    ];
 
-    const bankLines: any[] = [];
-    if (template.bank.show && data.bank) {
-      bankLines.push(new TextRun({ text: template.bank.heading.toUpperCase(), bold: true, color: primaryColor }));
-      
-      const sortedBank = [...template.bank.fields].sort((a, b) => a.order - b.order);
-      sortedBank.forEach(f => {
-        if (!f.visible) return;
-        let txt = '';
-        if (f.key === 'bankName') txt = data.bank?.bankName || '';
-        else if (f.key === 'accountHolder') txt = data.bank?.accountHolder || '';
-        else if (f.key === 'accountNumber') txt = data.bank?.accountNumber || '';
-        else if (f.key === 'iban') txt = data.bank?.iban || '';
-        else if (f.key === 'bic') txt = data.bank?.bic || '';
+    [...footerBlocks]
+      .sort((a, b) => a.order - b.order)
+      .forEach(block => {
+        if (!block.visible) return;
 
-        if (txt) {
-          bankLines.push(new TextRun({ text: `${f.label}: `, bold: true, color: textColor, break: 1 }));
-          bankLines.push(new TextRun({ text: txt, color: mutedColor }));
+        if (block.key === 'payment' && template.payment.show && template.payment.instructions) {
+          documentChildren.push(
+            new Paragraph({
+              spacing: { before: 120, after: 40 },
+              children: [
+                new TextRun({
+                  text: (template.payment.heading || 'Payment Instructions').toUpperCase(),
+                  bold: true,
+                  color: primaryColor,
+                  size: template.theme.baseFontSize * 2,
+                })
+              ]
+            })
+          );
+          documentChildren.push(
+            new Paragraph({
+              spacing: { after: 120 },
+              children: [
+                new TextRun({
+                  text: template.payment.instructions,
+                  color: mutedColor,
+                  size: template.theme.baseFontSize * 2,
+                })
+              ]
+            })
+          );
+        }
+
+        if (block.key === 'bank' && template.bank.show && data.bank) {
+          documentChildren.push(
+            new Paragraph({
+              spacing: { before: 120, after: 40 },
+              children: [
+                new TextRun({
+                  text: template.bank.heading.toUpperCase(),
+                  bold: true,
+                  color: primaryColor,
+                  size: template.theme.baseFontSize * 2,
+                })
+              ]
+            })
+          );
+
+          const bankFieldsText: any[] = [];
+          const sortedBank = [...template.bank.fields].sort((a, b) => a.order - b.order);
+          sortedBank.forEach(f => {
+            if (!f.visible) return;
+            let txt = '';
+            if (f.key === 'bankName') txt = data.bank?.bankName || '';
+            else if (f.key === 'accountHolder') txt = data.bank?.accountHolder || '';
+            else if (f.key === 'accountNumber') txt = data.bank?.accountNumber || '';
+            else if (f.key === 'iban') txt = data.bank?.iban || '';
+            else if (f.key === 'bic') txt = data.bank?.bic || '';
+
+            if (txt) {
+              bankFieldsText.push(
+                new TextRun({ text: `${f.label}: `, bold: true, color: textColor, break: bankFieldsText.length > 0 ? 1 : 0 }),
+                new TextRun({ text: txt, color: mutedColor })
+              );
+            }
+          });
+
+          if (bankFieldsText.length > 0) {
+            documentChildren.push(
+              new Paragraph({
+                children: bankFieldsText,
+                spacing: { after: 120 }
+              })
+            );
+          }
+        }
+
+        if (block.key === 'qr' && data.qrUrl) {
+          try {
+            const base64Data = data.qrUrl.replace(/^data:image\/\w+;base64,/, '');
+            const imgBuffer = Buffer.from(base64Data, 'base64');
+            documentChildren.push(
+              new Paragraph({
+                spacing: { before: 80, after: 80 },
+                children: [
+                  new ImageRun({
+                    data: imgBuffer,
+                    transformation: { width: 75, height: 75 },
+                    type: 'png'
+                  })
+                ]
+              })
+            );
+          } catch (err) {
+            console.error('Failed to draw QR in docx:', err);
+          }
+        }
+
+        if (block.key === 'signature' && template.signature.show) {
+          const sigParagraphChildren: any[] = [];
+          if (data.signatureUrl) {
+            try {
+              const base64Data = data.signatureUrl.replace(/^data:image\/\w+;base64,/, '');
+              const imgBuffer = Buffer.from(base64Data, 'base64');
+              sigParagraphChildren.push(
+                new ImageRun({
+                  data: imgBuffer,
+                  transformation: { width: 120, height: 40 },
+                  type: 'png'
+                }),
+                new TextRun({ text: "", break: 1 })
+              );
+            } catch (err) {
+              console.error('Failed to draw signature image in docx:', err);
+            }
+          }
+
+          sigParagraphChildren.push(
+            new TextRun({ text: '__________________________', color: mutedColor }),
+            new TextRun({ text: template.signature.label, bold: true, color: textColor, break: 1 })
+          );
+
+          documentChildren.push(
+            new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              spacing: { before: 180, after: 120 },
+              children: sigParagraphChildren
+            })
+          );
         }
       });
-    }
 
-    const infoTable = new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: {
-        top: { style: BorderStyle.NONE },
-        left: { style: BorderStyle.NONE },
-        right: { style: BorderStyle.NONE },
-        bottom: { style: BorderStyle.NONE },
-      },
-      rows: [
-        new TableRow({
-          children: [
-            new TableCell({
-              width: { size: 50, type: WidthType.PERCENTAGE },
-              children: [new Paragraph({ children: paymentLines })],
-            }),
-            new TableCell({
-              width: { size: 50, type: WidthType.PERCENTAGE },
-              children: [new Paragraph({ children: bankLines })],
-            }),
-          ],
-        }),
-      ],
-    });
-    documentChildren.push(infoTable);
-    documentChildren.push(new Paragraph({ spacing: { after: 200 } }));
-
-    // 7. Signature & Seal
-    if (template.signature.show) {
-      const sigPara = new Paragraph({
-        alignment: AlignmentType.RIGHT,
-        children: [
-          new TextRun({ text: '__________________________', color: mutedColor }),
-          new TextRun({ text: template.signature.label, bold: true, color: textColor, break: 1 }),
-        ],
-      });
-      documentChildren.push(sigPara);
-    }
-
-    // 8. Footer
+    // 8. Footer (radix / docx section footer)
     let docFooter = undefined;
-    if (template.footer.show) {
+    const footerBlockConfig = footerBlocks.find(b => b.key === 'footer');
+    if (template.footer.show && footerBlockConfig?.visible) {
       docFooter = {
         default: new Footer({
           children: [
@@ -470,7 +533,7 @@ export class DocxRenderer implements InvoiceRenderer {
               alignment: AlignmentType.CENTER,
               children: [
                 new TextRun({
-                  text: template.footer.text,
+                  text: template.footer.text || '',
                   color: mutedColor,
                   size: (template.theme.baseFontSize - 2) * 2,
                 }),

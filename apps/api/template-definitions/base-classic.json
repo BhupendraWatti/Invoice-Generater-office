@@ -206,16 +206,8 @@
         "order": 1
       },
       {
-        "key": "quantity",
-        "label": "Qty",
-        "visible": true,
-        "width": 10,
-        "align": "right",
-        "order": 2
-      },
-      {
         "key": "rate",
-        "label": "Unit Rate",
+        "label": "Rate",
         "visible": true,
         "width": 15,
         "align": "right",
@@ -345,5 +337,37 @@
     "show": true,
     "text": "Granth Infotech Private Limited — Services & Software Delivery Division",
     "showPageNumbers": true
-  }
+  },
+  "footerBlocks": [
+    {
+      "key": "payment",
+      "label": "Payment Instructions",
+      "visible": true,
+      "order": 0
+    },
+    {
+      "key": "bank",
+      "label": "Bank Details",
+      "visible": true,
+      "order": 1
+    },
+    {
+      "key": "qr",
+      "label": "QR Code",
+      "visible": true,
+      "order": 2
+    },
+    {
+      "key": "signature",
+      "label": "Signature",
+      "visible": true,
+      "order": 3
+    },
+    {
+      "key": "footer",
+      "label": "Footer Declaration",
+      "visible": true,
+      "order": 4
+    }
+  ]
 }

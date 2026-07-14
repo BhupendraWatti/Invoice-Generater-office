@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, HttpException } from '@nestjs/common';
 import { CompaniesService } from './companies.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateCompanyDto } from '@docflow/shared-types';
@@ -20,12 +20,28 @@ export class CompaniesController {
 
   @Post()
   async create(@Body() body: CreateCompanyDto) {
-    return this.companiesService.create(body);
+    try {
+      return await this.companiesService.create(body);
+    } catch (err: any) {
+      console.error('Failed to create company:', err);
+      throw new HttpException(
+        { message: err?.message || 'Failed to create company', detail: err?.stack || '' },
+        500
+      );
+    }
   }
 
   @Put(':id')
   async update(@Param('id') id: string, @Body() body: Partial<CreateCompanyDto>) {
-    return this.companiesService.update(id, body);
+    try {
+      return await this.companiesService.update(id, body);
+    } catch (err: any) {
+      console.error(`Failed to update company ${id}:`, err);
+      throw new HttpException(
+        { message: err?.message || 'Failed to update company', detail: err?.stack || '' },
+        500
+      );
+    }
   }
 
   @Delete(':id')

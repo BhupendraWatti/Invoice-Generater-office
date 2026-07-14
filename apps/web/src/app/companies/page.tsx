@@ -26,6 +26,9 @@ export default function CompaniesPage() {
   const [error, setError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
 
+  // Logo branding state
+  const [logoUrl, setLogoUrl] = useState('');
+
   // General Company Fields
   const [name, setName] = useState('');
   const [registrationNumber, setRegistrationNumber] = useState('');
@@ -88,6 +91,7 @@ export default function CompaniesPage() {
     setName('');
     setRegistrationNumber('');
     setTaxId('');
+    setLogoUrl('');
     setAddresses([{ type: 'BILLING', line1: '', line2: '', city: '', postalCode: '', country: '', isDefault: true }]);
     setContacts([{ firstName: '', lastName: '', email: '', phone: '', role: 'PRIMARY', isDefault: true }]);
     setBankAccounts([{ bankName: '', accountHolder: '', accountNumber: '', iban: '', bic: '', gstNumber: '', isDefault: true }]);
@@ -95,13 +99,18 @@ export default function CompaniesPage() {
     setDrawerOpen(true);
   };
 
-  const handleOpenEdit = (comp: any) => {
+  const handleOpenEdit = async (comp: any) => {
     setIsEditing(true);
     setError('');
     setName(comp.name);
     setRegistrationNumber(comp.registrationNumber || '');
     setTaxId(comp.taxId || '');
-
+    setLogoUrl('');
+    // Load existing branding logo if available
+    try {
+      const branding = await api.customization.getBranding(comp.id);
+      if (branding?.logoUrl) setLogoUrl(branding.logoUrl);
+    } catch {}
     // Map nested fields if present, else fallback
     setAddresses(comp.addresses?.length ? comp.addresses : [{ type: 'BILLING', line1: '', line2: '', city: '', postalCode: '', country: '', isDefault: true }]);
     setContacts(comp.contacts?.length ? comp.contacts : [{ firstName: '', lastName: '', email: '', phone: '', role: 'PRIMARY', isDefault: true }]);
@@ -207,11 +216,22 @@ export default function CompaniesPage() {
     };
 
     try {
+      let savedId: string;
       if (isEditing && selectedCompanyId) {
         await api.companies.update(selectedCompanyId, payload);
+        savedId = selectedCompanyId;
       } else {
         const newComp = await api.companies.create(payload);
+        savedId = newComp.id;
         setSelectedCompanyId(newComp.id);
+      }
+      // Save logo to branding if provided
+      if (logoUrl && savedId) {
+        try {
+          await api.customization.updateBranding(savedId, { logoUrl });
+        } catch (brandErr) {
+          console.error('Logo save failed:', brandErr);
+        }
       }
       setDrawerOpen(false);
       loadCompanies();
@@ -518,6 +538,60 @@ export default function CompaniesPage() {
                       placeholder="VAT-45678"
                       className="px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none focus:ring-1 focus:ring-primary text-body-sm font-medium"
                     />
+                  </div>
+                </div>
+              </section>
+
+              {/* Company Logo Upload */}
+              <section className="space-y-3 border-t border-outline-variant/60 pt-4">
+                <h3 className="font-label-sm text-[10px] font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[14px]">image</span>
+                  Company Logo
+                </h3>
+                <div className="flex items-center gap-3">
+                  {logoUrl ? (
+                    <div className="relative group">
+                      <img
+                        src={logoUrl}
+                        alt="Company logo"
+                        className="h-14 max-w-[140px] object-contain border border-outline-variant rounded bg-surface-container-low p-1.5"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setLogoUrl('')}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-error text-on-error rounded-full text-[11px] flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <span className="material-symbols-outlined text-[12px]">close</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-14 w-24 border-2 border-dashed border-outline-variant/60 rounded flex items-center justify-center bg-surface-container-low">
+                      <span className="material-symbols-outlined text-outline text-[24px]">add_photo_alternate</span>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="company-logo-upload"
+                      className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-container border border-outline-variant rounded text-[11px] font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">upload</span>
+                      {logoUrl ? 'Replace Logo' : 'Upload Logo'}
+                    </label>
+                    <input
+                      id="company-logo-upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () => setLogoUrl(reader.result as string);
+                        reader.readAsDataURL(file);
+                        e.target.value = '';
+                      }}
+                    />
+                    <p className="text-[9px] text-on-surface-variant">PNG, JPG, SVG · Max 2MB<br/>Auto-used on all invoices for this company</p>
                   </div>
                 </div>
               </section>
