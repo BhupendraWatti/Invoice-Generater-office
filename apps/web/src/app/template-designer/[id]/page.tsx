@@ -15,7 +15,7 @@ export default function TemplateDesignerWorkspacePage() {
   const [templateDef, setTemplateDef] = useState<TemplateDefinitionDto | null>(null);
   const [documents, setDocuments] = useState<DocumentDto[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string>('');
-  
+
   // Real or mock data loaded from preview endpoint
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
 
@@ -23,7 +23,7 @@ export default function TemplateDesignerWorkspacePage() {
   const [saving, setSaving] = useState(false);
   const [rendering, setRendering] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
-  
+
   // Active configuration section selection state
   const [activePanel, setActivePanel] = useState<string>('theme');
 
@@ -34,7 +34,7 @@ export default function TemplateDesignerWorkspacePage() {
         api.templateEngine.getDefinition(id),
         api.documents.list({ limit: 20 }),
       ]);
-      
+
       // Seed default footer layout blocks if undefined
       if (!def.footerBlocks) {
         def.footerBlocks = [
@@ -45,13 +45,13 @@ export default function TemplateDesignerWorkspacePage() {
           { key: 'footer', label: 'Footer Declaration', visible: def.footer?.show ?? true, order: 4 },
         ];
       }
-      
+
       setTemplateDef(def);
       setDocuments(docList);
       if (docList.length > 0) {
         setSelectedDocId(docList[0].id);
       }
-      
+
       // Load initial preview data using local mock fallback
       const prevData = await api.templateEngine.preview(def, docList[0]?.id || undefined);
       setInvoiceData(prevData.invoiceData);
@@ -106,7 +106,7 @@ export default function TemplateDesignerWorkspacePage() {
     try {
       // Auto-save styling parameters before generating file exports
       await api.templateEngine.updateDefinition(id, templateDef);
-      
+
       const res = await api.templateEngine.render(selectedDocId, id, format);
       const binaryStr = window.atob(res.base64);
       const len = binaryStr.length;
@@ -114,13 +114,13 @@ export default function TemplateDesignerWorkspacePage() {
       for (let i = 0; i < len; i++) {
         bytes[i] = binaryStr.charCodeAt(i);
       }
-      
+
       const blob = new Blob([bytes], { type: res.mimeType });
       const downloadLink = document.createElement('a');
       downloadLink.href = window.URL.createObjectURL(blob);
       downloadLink.download = res.filename;
       downloadLink.click();
-      
+
       triggerToast(`${format.toUpperCase()} invoice compiled successfully.`);
     } catch (err: any) {
       console.error('Failed to compile file:', err);
@@ -158,7 +158,7 @@ export default function TemplateDesignerWorkspacePage() {
   // Styles values
   const themeColors = templateDef.theme.colors;
   const pageMargins = templateDef.page.margins;
-  
+
   // Safe array lists for configurations
   const sortedColumns = [...templateDef.table.columns].sort((a, b) => a.order - b.order);
   const sortedTotals = [...templateDef.totals.rows].sort((a, b) => a.order - b.order);
@@ -173,7 +173,7 @@ export default function TemplateDesignerWorkspacePage() {
       )}
 
       <main className="flex h-full w-full overflow-hidden bg-background">
-        
+
         {/* ======================================================== */}
         {/* LEFT CONFIGURATION PANELS NAVIGATION */}
         {/* ======================================================== */}
@@ -202,8 +202,8 @@ export default function TemplateDesignerWorkspacePage() {
                 key={item.id}
                 onClick={() => setActivePanel(item.id)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors cursor-pointer
-                  ${activePanel === item.id 
-                    ? 'bg-primary/5 text-primary border border-primary/10' 
+                  ${activePanel === item.id
+                    ? 'bg-primary/5 text-primary border border-primary/10'
                     : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface border border-transparent'}`}
               >
                 <span className="material-symbols-outlined text-[16px]">{item.icon}</span>
@@ -217,7 +217,7 @@ export default function TemplateDesignerWorkspacePage() {
         {/* MIDDLE LIVE CANVAS HTML PREVIEW */}
         {/* ======================================================== */}
         <section className="flex-1 overflow-y-auto p-8 bg-surface-bright custom-scrollbar flex flex-col items-center">
-          
+          <p>THis is the part i adding for checking the pdf</p>
           {/* Document Preview controls */}
           <div className="w-full max-w-[800px] mb-4 bg-surface border border-outline-variant p-3 rounded-lg shadow-xs flex justify-between items-center select-none text-body-sm font-semibold">
             <div className="flex items-center gap-2">
@@ -232,7 +232,7 @@ export default function TemplateDesignerWorkspacePage() {
                 ))}
               </select>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleDownload('docx')}
@@ -254,7 +254,7 @@ export default function TemplateDesignerWorkspacePage() {
           </div>
 
           {/* HTML Invoice Sheet simulating output page */}
-          <div 
+          <div
             style={{
               padding: `${pageMargins.top}pt ${pageMargins.right}pt ${pageMargins.bottom}pt ${pageMargins.left}pt`,
               fontFamily: templateDef.theme.fonts.body.includes('Mono') ? 'monospace' : templateDef.theme.fonts.body.includes('Serif') ? 'serif' : 'sans-serif',
@@ -265,7 +265,7 @@ export default function TemplateDesignerWorkspacePage() {
           >
             {/* Watermark Visual Overlay */}
             {templateDef.watermark.enabled && (
-              <div 
+              <div
                 style={{
                   opacity: templateDef.watermark.opacity,
                   transform: `translate(-50%, -50%) rotate(-${templateDef.watermark.angle}deg)`,
@@ -283,10 +283,10 @@ export default function TemplateDesignerWorkspacePage() {
               <div className="space-y-6">
                 {templateDef.logo.enabled && invoiceData.logoUrl && (
                   <div className={`flex justify-${templateDef.logo.position === 'right' ? 'end' : templateDef.logo.position === 'center' ? 'center' : 'start'}`}>
-                    <img 
-                      src={invoiceData.logoUrl} 
-                      alt="Logo" 
-                      style={{ maxWidth: `${templateDef.logo.maxWidth}px`, maxHeight: '60px' }} 
+                    <img
+                      src={invoiceData.logoUrl}
+                      alt="Logo"
+                      style={{ maxWidth: `${templateDef.logo.maxWidth}px`, maxHeight: '60px' }}
                       className="object-contain"
                     />
                   </div>
@@ -307,7 +307,7 @@ export default function TemplateDesignerWorkspacePage() {
               <div className="text-right space-y-4">
                 {templateDef.header.showTitle && (
                   <div>
-                    <h2 
+                    <h2
                       style={{ color: themeColors.primary, fontSize: `${templateDef.theme.baseFontSize + 12}pt` }}
                       className="font-bold uppercase tracking-wide"
                     >
@@ -318,7 +318,7 @@ export default function TemplateDesignerWorkspacePage() {
                     )}
                   </div>
                 )}
-                
+
                 {/* Meta details */}
                 <div className="text-[11px] leading-relaxed">
                   <p><strong className="font-semibold text-on-surface">Invoice No:</strong> {invoiceData.documentNumber}</p>
@@ -344,12 +344,12 @@ export default function TemplateDesignerWorkspacePage() {
             <div className="mb-6 z-10">
               <table className="w-full text-left border-collapse text-[11px] font-semibold">
                 <thead>
-                  <tr 
+                  <tr
                     style={{ backgroundColor: themeColors.tableHeaderBg, color: themeColors.tableHeaderText }}
                     className="border-b border-outline-variant/60"
                   >
                     {sortedColumns.map(col => col.visible && (
-                      <th 
+                      <th
                         key={col.key}
                         style={{ width: `${col.width}%`, textAlign: col.align === 'right' ? 'right' : col.align === 'center' ? 'center' : 'left' }}
                         className="p-2"
@@ -361,7 +361,7 @@ export default function TemplateDesignerWorkspacePage() {
                 </thead>
                 <tbody className="divide-y divide-outline-variant/30 text-on-surface">
                   {invoiceData.items.map((item, rIdx) => (
-                    <tr 
+                    <tr
                       key={item.index}
                       style={{ backgroundColor: templateDef.table.zebra && rIdx % 2 === 1 ? themeColors.zebraBg : 'transparent' }}
                     >
@@ -378,7 +378,7 @@ export default function TemplateDesignerWorkspacePage() {
                         else if (col.key === 'amount') val = formatCurrency(item.amount, invoiceData.currencySymbol);
 
                         return (
-                          <td 
+                          <td
                             key={col.key}
                             style={{ textAlign: col.align === 'right' ? 'right' : col.align === 'center' ? 'center' : 'left' }}
                             className="p-2.5 align-middle"
@@ -414,8 +414,8 @@ export default function TemplateDesignerWorkspacePage() {
                   else if (row.key === 'grandTotal') val = invoiceData.grandTotal;
 
                   return (
-                    <div 
-                      key={row.key} 
+                    <div
+                      key={row.key}
                       style={{ color: row.emphasis ? themeColors.primary : themeColors.text }}
                       className={`flex justify-between ${row.emphasis ? 'font-bold text-[12px] border-t border-outline-variant/60 pt-1.5 mt-1.5' : ''}`}
                     >
@@ -433,7 +433,7 @@ export default function TemplateDesignerWorkspacePage() {
                 .sort((a, b) => a.order - b.order)
                 .map(block => {
                   if (!block.visible) return null;
-                  
+
                   if (block.key === 'payment' && templateDef.payment.show && templateDef.payment.instructions) {
                     return (
                       <div key={block.key} className="border-t border-outline-variant/40 pt-4 text-[10px] leading-relaxed">
@@ -442,7 +442,7 @@ export default function TemplateDesignerWorkspacePage() {
                       </div>
                     );
                   }
-                  
+
                   if (block.key === 'bank' && templateDef.bank.show && invoiceData.bank) {
                     return (
                       <div key={block.key} className="border-t border-outline-variant/40 pt-4 text-[10px] leading-relaxed">
@@ -471,9 +471,9 @@ export default function TemplateDesignerWorkspacePage() {
                   if (block.key === 'qr' && invoiceData.qrUrl) {
                     return (
                       <div key={block.key} className="pt-2">
-                        <img 
-                          src={invoiceData.qrUrl} 
-                          alt="QR Code" 
+                        <img
+                          src={invoiceData.qrUrl}
+                          alt="QR Code"
                           className="w-20 h-20 object-contain border border-outline-variant rounded p-1"
                         />
                       </div>
@@ -485,9 +485,9 @@ export default function TemplateDesignerWorkspacePage() {
                       <div key={block.key} className="pt-6 text-right text-[10px]">
                         {invoiceData.signatureUrl ? (
                           <div className="inline-block text-center space-y-1">
-                            <img 
-                              src={invoiceData.signatureUrl} 
-                              alt="Signature" 
+                            <img
+                              src={invoiceData.signatureUrl}
+                              alt="Signature"
                               className="h-10 object-contain mx-auto"
                             />
                             <div className="border-t border-outline-variant w-40 inline-block"></div>
@@ -523,7 +523,7 @@ export default function TemplateDesignerWorkspacePage() {
         {/* ======================================================== */}
         <ContextualInspector title="Design Settings">
           <div className="flex flex-col gap-4 text-body-sm select-none">
-            
+
             <header className="pb-2 border-b border-outline-variant flex justify-between items-center">
               <div>
                 <span className="text-[10px] text-primary font-bold uppercase tracking-wide">ZOho custom styling</span>
@@ -581,7 +581,7 @@ export default function TemplateDesignerWorkspacePage() {
                     </select>
                   </div>
                 </div>
-                
+
                 {/* Margins Card */}
                 <div className="bg-surface border border-outline-variant rounded-xl p-4 space-y-4">
                   <div className="flex items-center justify-between border-b border-outline-variant/60 pb-2">
@@ -605,7 +605,7 @@ export default function TemplateDesignerWorkspacePage() {
                           <span className="capitalize">{side}</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <input 
+                          <input
                             type="range"
                             min="10"
                             max="80"
@@ -768,7 +768,7 @@ export default function TemplateDesignerWorkspacePage() {
                     </button>
                   </div>
                   <div className="flex items-center gap-3">
-                    <input 
+                    <input
                       type="range"
                       min="8"
                       max="16"
@@ -992,7 +992,7 @@ export default function TemplateDesignerWorkspacePage() {
                             />
                             <span className="font-bold text-on-surface truncate max-w-[120px]">{col.label || col.key}</span>
                           </div>
-                          
+
                           <button
                             onClick={() => {
                               const newCols = templateDef.table.columns.filter(c => c.key !== col.key);
@@ -1127,7 +1127,7 @@ export default function TemplateDesignerWorkspacePage() {
                           className="w-full px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none font-semibold"
                         />
                       </div>
-                      
+
                       <span className="text-[10px] text-on-surface-variant font-bold uppercase block mt-2">Display Fields</span>
                       <div className="space-y-2">
                         {templateDef.bank.fields.map(f => (
@@ -1198,14 +1198,14 @@ export default function TemplateDesignerWorkspacePage() {
                           className="w-full px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded text-body-sm text-on-surface focus:outline-none font-semibold"
                         />
                       </div>
-                      
+
                       {/* Opacity with synced inputs */}
                       <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between items-center text-[10px] text-on-surface-variant font-bold uppercase">
                           <span>Opacity (%)</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <input 
+                          <input
                             type="range"
                             min="5"
                             max="50"

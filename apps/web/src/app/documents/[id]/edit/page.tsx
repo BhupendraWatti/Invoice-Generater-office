@@ -3,14 +3,14 @@
 import React, { useState, useEffect, use, useRef } from 'react';
 import MainLayout from '../../../../components/shared/MainLayout';
 import { api } from '../../../../lib/api';
-import { 
-  DocumentDto, 
-  CompanyDto, 
-  CustomerDto, 
-  ProductDto, 
-  TaxConfigurationDto, 
-  UnitDto, 
-  DocumentVersionDto 
+import {
+  DocumentDto,
+  CompanyDto,
+  CustomerDto,
+  ProductDto,
+  TaxConfigurationDto,
+  UnitDto,
+  DocumentVersionDto
 } from '@docflow/shared-types';
 import Link from 'next/link';
 
@@ -33,7 +33,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
   const [blocks, setBlocks] = useState<DocumentBlockInput[]>([]);
   const [status, setStatus] = useState<string>('DRAFT');
   const [title, setTitle] = useState<string>('');
-  
+
   // Master lists
   const [companies, setCompanies] = useState<CompanyDto[]>([]);
   const [customers, setCustomers] = useState<CustomerDto[]>([]);
@@ -41,7 +41,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
   const [taxes, setTaxes] = useState<TaxConfigurationDto[]>([]);
   const [units, setUnits] = useState<UnitDto[]>([]);
   const [versions, setVersions] = useState<DocumentVersionDto[]>([]);
-  
+
   // Selected associations
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
@@ -166,7 +166,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
       setSelectedCustomerId(docData.customerId || '');
       setVersions(versionList);
       setTemplates(templateList);
-      
+
       setDesignerTemplates(designerTemplateList);
       const defaultTmpl = designerTemplateList.find(t => t.meta.isDefault) || designerTemplateList[0];
       setSelectedTemplateId(docData.templateId || (defaultTmpl ? defaultTmpl.meta.id : ''));
@@ -211,39 +211,39 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
             if (branding?.logoUrl) {
               setFieldVisibility(prev => ({ ...prev, logoUrl: branding.logoUrl || '' }));
             }
-          } catch {}
+          } catch { }
         }
         setBlocks(mapped.filter(b => !b.content?.isGlobalConfig));
       } else {
         // Build initial structure matching Stitch defaults
         setBlocks([
-          { 
-            id: 'b-cover', 
-            sortOrder: 0, 
-            blockType: 'COVER', 
-            content: { subtitle: 'Proposal Agreement & Details', date: new Date().toLocaleDateString(), logoUrl: '' } 
+          {
+            id: 'b-cover',
+            sortOrder: 0,
+            blockType: 'COVER',
+            content: { subtitle: 'Proposal Agreement & Details', date: new Date().toLocaleDateString(), logoUrl: '' }
           },
-          { 
-            id: 'b-text', 
-            sortOrder: 1, 
-            blockType: 'TEXT', 
-            content: { text: 'Thank you for choosing us. We are pleased to present the pricing breakdown below.' } 
+          {
+            id: 'b-text',
+            sortOrder: 1,
+            blockType: 'TEXT',
+            content: { text: 'Thank you for choosing us. We are pleased to present the pricing breakdown below.' }
           },
-          { 
-            id: 'b-table', 
-            sortOrder: 2, 
-            blockType: 'TABLE', 
-            content: { 
+          {
+            id: 'b-table',
+            sortOrder: 2,
+            blockType: 'TABLE',
+            content: {
               items: [{ sku: 'PROD-01', description: 'Consulting services', quantity: 5, rate: 120, unit: 'HR', taxCode: 'GST-18' }],
               discount: 0,
               adjustment: 0
-            } 
+            }
           },
-          { 
-            id: 'b-notes', 
-            sortOrder: 3, 
-            blockType: 'NOTES', 
-            content: { notes: 'Payment terms apply. Please process funds to our bank routing.' } 
+          {
+            id: 'b-notes',
+            sortOrder: 3,
+            blockType: 'NOTES',
+            content: { notes: 'Payment terms apply. Please process funds to our bank routing.' }
           }
         ]);
       }
@@ -291,15 +291,15 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           fieldVisibility
         }
       };
-      
+
       const fullPayload = [...blocksPayload, configBlock];
-      
+
       const serialized = fullPayload.map(b => ({
         sortOrder: b.sortOrder,
         blockType: b.blockType,
         content: JSON.stringify(b.content)
       }));
-      
+
       await Promise.all([
         api.documents.updateBlocks(id, serialized),
         api.documents.update(id, {
@@ -314,7 +314,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           templateId: selectedTemplateId || null,
         })
       ]);
-      
+
       if (!silent) triggerToast('Draft saved successfully.');
     } catch (err: any) {
       if (!silent) triggerToast(err.message || 'Auto-save failed.', true);
@@ -335,7 +335,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
   const moveBlock = (idx: number, direction: 'UP' | 'DOWN') => {
     const targetIdx = direction === 'UP' ? idx - 1 : idx + 1;
     if (targetIdx < 0 || targetIdx >= blocks.length) return;
-    
+
     const copy = [...blocks];
     const temp = copy[idx];
     copy[idx] = copy[targetIdx];
@@ -428,7 +428,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
     const items = (targetBlock.content?.items || []).map((item: any, i: number) => {
       if (i === itemIdx) {
         const next = { ...item, [key]: val };
-        
+
         // If product selected, auto-populate SKU, name, rate, unit, tax
         if (key === 'productId') {
           const matched = products.find(p => p.id === val);
@@ -455,7 +455,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
     try {
       const matchedUnit = units.find(u => u.code === unitCode) || units[0];
       const matchedTax = taxes.find(t => t.code === taxCode) || taxes[0];
-      
+
       await api.products.create({
         sku: sku,
         name: description || sku,
@@ -464,7 +464,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
         unitId: matchedUnit?.id,
         taxId: matchedTax?.id
       });
-      
+
       const updatedList = await api.products.list();
       setProducts(updatedList);
       triggerToast(`Product "${sku}" successfully added to master!`);
@@ -701,7 +701,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
         }
       `}</style>
       <div className="flex h-full w-full bg-background overflow-hidden relative">
-        
+
         {/* ======================================================== */}
         {/* LEFT PANEL: STRUCTURE & SECTIONS */}
         {/* ======================================================== */}
@@ -714,8 +714,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           {/* Section structure sorting sequence */}
           <div className="flex-1 overflow-y-auto p-3 space-y-1.5 custom-scrollbar">
             {blocks.map((block, idx) => (
-              <div 
-                key={block.id} 
+              <div
+                key={block.id}
                 onClick={() => setSelectedBlockId(block.id)}
                 className={`group flex flex-col p-2 bg-surface-container-low border rounded-lg cursor-pointer hover:border-primary/45 transition-all
                   ${selectedBlockId === block.id ? 'border-primary bg-primary-container/10 shadow-xs' : 'border-outline-variant/60'}`}
@@ -723,33 +723,33 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="material-symbols-outlined text-primary text-[15px]">
-                      {block.blockType === 'COVER' ? 'branding_watermark' : 
-                       block.blockType === 'TEXT' ? 'notes' : 
-                       block.blockType === 'TABLE' ? 'table_chart' : 
-                       block.blockType === 'CUSTOM_FIELDS' ? 'dashboard_customize' : 'description'}
+                      {block.blockType === 'COVER' ? 'branding_watermark' :
+                        block.blockType === 'TEXT' ? 'notes' :
+                          block.blockType === 'TABLE' ? 'table_chart' :
+                            block.blockType === 'CUSTOM_FIELDS' ? 'dashboard_customize' : 'description'}
                     </span>
                     <span className="text-[10.5px] font-bold text-on-surface truncate">
                       {block.blockType} #{idx + 1}
                     </span>
                   </div>
-                  
+
                   {/* Sorting triggers */}
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
                       disabled={idx === 0}
                       className="p-0.5 hover:bg-surface-container rounded text-on-surface-variant hover:text-primary disabled:opacity-30"
                     >
                       <span className="material-symbols-outlined text-[11px]">arrow_upward</span>
                     </button>
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
                       disabled={idx === blocks.length - 1}
                       className="p-0.5 hover:bg-surface-container rounded text-on-surface-variant hover:text-primary disabled:opacity-30"
                     >
                       <span className="material-symbols-outlined text-[11px]">arrow_downward</span>
                     </button>
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
                       className="p-0.5 hover:bg-surface-container rounded text-on-surface-variant hover:text-error"
                     >
@@ -765,31 +765,31 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           <div className="p-3 border-t border-outline-variant bg-surface-container-lowest space-y-2">
             <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider block">Add section block</span>
             <div className="grid grid-cols-2 gap-1.5 text-body-sm font-semibold">
-              <button 
+              <button
                 onClick={() => addBlockSection('TEXT')}
                 className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[10.5px] flex items-center justify-center gap-1"
               >
                 <span className="material-symbols-outlined text-[13px]">notes</span> Text
               </button>
-              <button 
+              <button
                 onClick={() => addBlockSection('TABLE')}
                 className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[10.5px] flex items-center justify-center gap-1"
               >
                 <span className="material-symbols-outlined text-[13px]">table_chart</span> Pricing
               </button>
-              <button 
+              <button
                 onClick={() => addBlockSection('NOTES')}
                 className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[10.5px] flex items-center justify-center gap-1"
               >
                 <span className="material-symbols-outlined text-[13px]">description</span> Notes
               </button>
-              <button 
+              <button
                 onClick={() => addBlockSection('COVER')}
                 className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[10.5px] flex items-center justify-center gap-1"
               >
                 <span className="material-symbols-outlined text-[13px]">branding_watermark</span> Branding
               </button>
-              <button 
+              <button
                 onClick={() => addBlockSection('CUSTOM_FIELDS')}
                 className="col-span-2 py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[10.5px] flex items-center justify-center gap-1 bg-primary-container/10 border-primary/20 text-primary"
               >
@@ -802,7 +802,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           <div className="p-3 border-t border-outline-variant bg-surface-container-low/40 space-y-2">
             <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider block">Page Layout Settings</span>
             <div className="space-y-2 text-[10.5px]">
-              
+
               <div className="flex flex-col gap-0.5">
                 <label className="text-[8.5px] text-on-surface-variant font-bold uppercase">Format Size</label>
                 <select
@@ -871,7 +871,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                 <div className="space-y-1.5 pt-1.5 border-t border-outline-variant/35 mt-1">
                   <div className="flex justify-between items-center text-[9px]">
                     <span className="text-on-surface-variant font-mono">T: {pageSettings.marginTop}pt</span>
-                    <input 
+                    <input
                       type="range" min="10" max="100" value={pageSettings.marginTop}
                       onChange={(e) => setPageSettings(prev => ({ ...prev, marginTop: Number(e.target.value) }))}
                       className="w-24 accent-primary h-1"
@@ -879,7 +879,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   </div>
                   <div className="flex justify-between items-center text-[9px]">
                     <span className="text-on-surface-variant font-mono">R: {pageSettings.marginRight}pt</span>
-                    <input 
+                    <input
                       type="range" min="10" max="100" value={pageSettings.marginRight}
                       onChange={(e) => setPageSettings(prev => ({ ...prev, marginRight: Number(e.target.value) }))}
                       className="w-24 accent-primary h-1"
@@ -887,7 +887,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   </div>
                   <div className="flex justify-between items-center text-[9px]">
                     <span className="text-on-surface-variant font-mono">B: {pageSettings.marginBottom}pt</span>
-                    <input 
+                    <input
                       type="range" min="10" max="100" value={pageSettings.marginBottom}
                       onChange={(e) => setPageSettings(prev => ({ ...prev, marginBottom: Number(e.target.value) }))}
                       className="w-24 accent-primary h-1"
@@ -895,7 +895,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   </div>
                   <div className="flex justify-between items-center text-[9px]">
                     <span className="text-on-surface-variant font-mono">L: {pageSettings.marginLeft}pt</span>
-                    <input 
+                    <input
                       type="range" min="10" max="100" value={pageSettings.marginLeft}
                       onChange={(e) => setPageSettings(prev => ({ ...prev, marginLeft: Number(e.target.value) }))}
                       className="w-24 accent-primary h-1"
@@ -911,18 +911,18 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
         {/* ======================================================== */}
         {/* CENTER PANE: EDITABLE DOCUMENT CANVAS */}
         {/* ======================================================== */}
-        <main 
+        <main
           style={{ paddingRight: `${rightSidebarWidth + 24}px` }}
           className="flex-1 overflow-y-auto p-8 h-full custom-scrollbar"
         >
           <div className="max-w-[1400px] mx-auto flex flex-col gap-6 pb-24">
-            
+
             {/* Action title toolbar */}
             <div className="flex justify-between items-center border-b border-outline-variant/60 pb-3 select-none no-print">
               <div className="flex-1 min-w-0 pr-6">
-                <input 
-                  type="text" 
-                  value={title} 
+                <input
+                  type="text"
+                  value={title}
                   onChange={(e) => {
                     setTitle(e.target.value);
                     triggerAutoSave(blocks, e.target.value);
@@ -936,7 +936,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
               </div>
 
               <div className="flex items-center gap-2">
-                <button 
+                <button
                   onClick={() => handleSaveBlocks(blocks, title)}
                   disabled={saving}
                   className="bg-primary text-on-primary hover:bg-primary-fixed-variant transition-colors text-body-sm font-bold h-8 px-4 rounded flex items-center gap-1 disabled:opacity-50 shadow-sm active:scale-95"
@@ -948,7 +948,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
             </div>
 
             {/* Document Canvas Sheet Wrapper (WYSIWYG A4 Print Layout Editor) */}
-            <div 
+            <div
               id="print-sheet"
               style={{
                 borderColor: accentColor,
@@ -963,10 +963,10 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
               className={`bg-white border-t-8 rounded-lg shadow-md relative overflow-hidden text-left text-body-sm font-medium mx-auto transition-all duration-300 select-none
                 ${pageSettings.orientation === 'landscape' ? 'max-w-[1100px] min-h-[750px]' : 'max-w-[850px] min-h-[960px]'}`}
             >
-              
+
               {/* Simulated draft watermark overlay */}
               {showWatermark && (
-                <div 
+                <div
                   style={{
                     opacity: activeTmpl ? activeTmpl.watermark.opacity : 0.05,
                     transform: `translate(-50%, -50%) rotate(-${activeTmpl ? activeTmpl.watermark.angle : 45}deg)`,
@@ -979,7 +979,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
               )}
 
               {/* Redesigned Document Header block container */}
-              <div 
+              <div
                 onClick={() => setSelectedBlockId('document-header')}
                 className={`grid grid-cols-2 gap-8 mb-8 z-10 border-b pb-4 cursor-pointer hover:ring-1 hover:ring-primary/45 rounded p-3 transition-all relative group/block
                   ${selectedBlockId === 'document-header' ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-outline-variant/40'}`}
@@ -1081,7 +1081,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                 {/* Right Column: Title + Company Info */}
                 <div className="text-right space-y-4">
                   <div>
-                    <h2 
+                    <h2
                       style={{ color: accentColor, fontSize: '20pt' }}
                       className="font-bold uppercase tracking-wide inline-flex items-center gap-1 justify-end"
                     >
@@ -1119,7 +1119,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                             if (branding?.logoUrl) {
                               setFieldVisibility(prev => ({ ...prev, logoUrl: branding.logoUrl || '' }));
                             }
-                          } catch {}
+                          } catch { }
                         }
                       }}
                       style={{ color: accentColor }}
@@ -1167,11 +1167,11 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
               {/* 3. DYNAMIC BLOCKS LOOP (TABLE, TEXT, NOTES, COVER) */}
               <div className="space-y-6">
                 {blocks.map((block, idx) => {
-                  
+
                   // COVER BLOCK RENDERING
                   if (block.blockType === 'COVER') {
                     return (
-                      <div 
+                      <div
                         key={block.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
                         className={`space-y-2 border-b pb-4 cursor-pointer hover:ring-1 hover:ring-primary/45 rounded p-2 transition-all relative group/block
@@ -1179,8 +1179,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                       >
                         {/* Floating controls */}
                         <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
                             disabled={idx === 0}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
@@ -1188,8 +1188,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                           >
                             <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
                             disabled={idx === blocks.length - 1}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
@@ -1197,16 +1197,16 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                           >
                             <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); duplicateBlock(idx); }}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary"
                             title="Duplicate block"
                           >
                             <span className="material-symbols-outlined text-[12px]">content_copy</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-error-container/20 hover:text-error text-on-surface-variant"
                             title="Delete"
@@ -1214,8 +1214,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                             <span className="material-symbols-outlined text-[12px]">delete</span>
                           </button>
                         </div>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           value={block.content?.subtitle || ''}
                           onChange={(e) => updateBlockContent(idx, 'subtitle', e.target.value)}
                           style={{ color: accentColor }}
@@ -1229,7 +1229,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   // TEXT BLOCK RENDERING
                   if (block.blockType === 'TEXT') {
                     return (
-                      <div 
+                      <div
                         key={block.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
                         className={`relative group/block border rounded p-2 cursor-pointer transition-all hover:ring-1 hover:ring-primary/45
@@ -1237,32 +1237,32 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                       >
                         {/* Floating controls */}
                         <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
                             disabled={idx === 0}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
                           >
                             <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
                             disabled={idx === blocks.length - 1}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
                           >
                             <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); duplicateBlock(idx); }}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary"
                             title="Duplicate block"
                           >
                             <span className="material-symbols-outlined text-[12px]">content_copy</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-error-container/20 hover:text-error text-on-surface-variant"
                           >
@@ -1284,7 +1284,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   if (block.blockType === 'TABLE') {
                     const { subtotal, taxTotal, total } = calculateTotals(block.content);
                     return (
-                      <div 
+                      <div
                         key={block.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
                         className={`space-y-4 relative group/block border rounded p-2 cursor-pointer transition-all hover:ring-1 hover:ring-primary/45
@@ -1292,32 +1292,32 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                       >
                         {/* Floating controls */}
                         <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
                             disabled={idx === 0}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
                           >
                             <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
                             disabled={idx === blocks.length - 1}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
                           >
                             <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); duplicateBlock(idx); }}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary"
                             title="Duplicate block"
                           >
                             <span className="material-symbols-outlined text-[12px]">content_copy</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-error-container/20 hover:text-error text-on-surface-variant"
                           >
@@ -1327,23 +1327,23 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
 
                         <div className="overflow-x-auto">
                           {(() => {
-                            const sortedColumns = (activeTmpl?.table?.columns?.length 
+                            const sortedColumns = (activeTmpl?.table?.columns?.length
                               ? [...activeTmpl.table.columns]
                               : [
-                                  { key: 'index', label: 'Sr. No', visible: true, width: 8, align: 'center', order: 0 },
-                                  { key: 'description', label: 'Description', visible: true, width: 45, align: 'left', order: 1 },
-                                  { key: 'type', label: 'Type', visible: fieldVisibility.showTableType, width: 20, align: 'left', order: 2 },
-                                  { key: 'amount', label: 'Amount (₹)', visible: true, width: 15, align: 'right', order: 3 },
-                                  { key: 'tax', label: 'Tax', visible: fieldVisibility.showTableTaxCode, width: 12, align: 'center', order: 4 }
-                                ])
-                                .filter(c => c.visible && c.key !== 'sku')
-                                .sort((a, b) => a.order - b.order);
+                                { key: 'index', label: 'Sr. No', visible: true, width: 8, align: 'center', order: 0 },
+                                { key: 'description', label: 'Description', visible: true, width: 45, align: 'left', order: 1 },
+                                { key: 'type', label: 'Type', visible: fieldVisibility.showTableType, width: 20, align: 'left', order: 2 },
+                                { key: 'amount', label: 'Amount (₹)', visible: true, width: 15, align: 'right', order: 3 },
+                                { key: 'tax', label: 'Tax', visible: fieldVisibility.showTableTaxCode, width: 12, align: 'center', order: 4 }
+                              ])
+                              .filter(c => c.visible && c.key !== 'sku')
+                              .sort((a, b) => a.order - b.order);
 
                             return (
                               <table className="w-full text-left border-collapse text-[11px] font-medium">
                                 <thead>
-                                  <tr 
-                                    style={{ 
+                                  <tr
+                                    style={{
                                       backgroundColor: activeTmpl ? activeTmpl.theme.colors.tableHeaderBg : `${accentColor}10`,
                                       color: activeTmpl ? activeTmpl.theme.colors.tableHeaderText : '#ffffff',
                                       borderBottom: `2px solid ${accentColor}`
@@ -1351,11 +1351,11 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                     className="text-on-surface-variant font-bold select-none text-[10px] uppercase tracking-wider"
                                   >
                                     {sortedColumns.map(col => (
-                                      <th 
-                                        key={col.key} 
-                                        style={{ 
-                                          width: `${col.width}%`, 
-                                          textAlign: col.align === 'right' ? 'right' : col.align === 'center' ? 'center' : 'left' 
+                                      <th
+                                        key={col.key}
+                                        style={{
+                                          width: `${col.width}%`,
+                                          textAlign: col.align === 'right' ? 'right' : col.align === 'center' ? 'center' : 'left'
                                         }}
                                         className="p-2"
                                       >
@@ -1367,8 +1367,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                 </thead>
                                 <tbody className="divide-y divide-outline-variant/40">
                                   {(block.content?.items || []).map((item: any, itemIdx: number) => (
-                                    <tr 
-                                      key={itemIdx} 
+                                    <tr
+                                      key={itemIdx}
                                       style={{
                                         backgroundColor: activeTmpl && activeTmpl.table.zebra && itemIdx % 2 === 1 ? activeTmpl.theme.colors.zebraBg : 'transparent'
                                       }}
@@ -1398,8 +1398,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                         if (col.key === 'type') {
                                           return (
                                             <td key={col.key} className="p-2 align-top">
-                                              <input 
-                                                type="text" 
+                                              <input
+                                                type="text"
                                                 value={item.type || ''}
                                                 onChange={(e) => updateLineItemField(idx, itemIdx, 'type', e.target.value)}
                                                 placeholder="Billing Type"
@@ -1411,8 +1411,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                         if (col.key === 'amount') {
                                           return (
                                             <td key={col.key} style={{ textAlign: 'right' }} className="p-2 align-top">
-                                              <input 
-                                                type="number" 
+                                              <input
+                                                type="number"
                                                 value={item.rate}
                                                 onChange={(e) => updateLineItemField(idx, itemIdx, 'rate', Number(e.target.value) || 0)}
                                                 className="w-20 bg-transparent text-right focus:outline-none border-b border-outline-variant/60 focus:border-primary font-mono text-[11px]"
@@ -1437,8 +1437,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                         }
                                         return (
                                           <td key={col.key} className="p-2 align-top">
-                                            <input 
-                                              type="text" 
+                                            <input
+                                              type="text"
                                               value={item.customFields?.[col.key] || ''}
                                               onChange={(e) => {
                                                 const customFields = { ...(item.customFields || {}), [col.key]: e.target.value };
@@ -1451,7 +1451,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                         );
                                       })}
                                       <td className="p-2 text-right align-top no-print flex items-center justify-end gap-1.5">
-                                        <button 
+                                        <button
                                           type="button"
                                           onClick={() => removeLineItem(idx, itemIdx)}
                                           className="text-on-surface-variant hover:text-error"
@@ -1493,8 +1493,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                             {fieldVisibility.applyDiscount && (
                               <div className="flex justify-between items-center text-on-surface-variant gap-2">
                                 <span>Discount (₹):</span>
-                                <input 
-                                  type="number" 
+                                <input
+                                  type="number"
                                   value={block.content?.discount || 0}
                                   onChange={(e) => updateBlockContent(idx, 'discount', Number(e.target.value) || 0)}
                                   className="w-16 bg-transparent text-right focus:outline-none border-b border-outline-variant/60 focus:border-primary font-mono py-0.5"
@@ -1504,8 +1504,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                             {fieldVisibility.applyAdjustment && (
                               <div className="flex justify-between items-center text-on-surface-variant gap-2">
                                 <span>Adjustment (₹):</span>
-                                <input 
-                                  type="number" 
+                                <input
+                                  type="number"
                                   value={block.content?.adjustment || 0}
                                   onChange={(e) => updateBlockContent(idx, 'adjustment', Number(e.target.value) || 0)}
                                   className="w-16 bg-transparent text-right focus:outline-none border-b border-outline-variant/60 focus:border-primary font-mono py-0.5"
@@ -1526,7 +1526,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   // NOTES BLOCK RENDERING
                   if (block.blockType === 'NOTES') {
                     return (
-                      <div 
+                      <div
                         key={block.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
                         className={`relative group/block border rounded p-2 cursor-pointer transition-all hover:ring-1 hover:ring-primary/45
@@ -1534,32 +1534,32 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                       >
                         {/* Floating controls */}
                         <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
                             disabled={idx === 0}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
                           >
                             <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
                             disabled={idx === blocks.length - 1}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
                           >
                             <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); duplicateBlock(idx); }}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary"
                             title="Duplicate block"
                           >
                             <span className="material-symbols-outlined text-[12px]">content_copy</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-error-container/20 hover:text-error text-on-surface-variant"
                           >
@@ -1584,7 +1584,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   if (block.blockType === 'CUSTOM_FIELDS') {
                     const fields = block.content?.fields || [];
                     return (
-                      <div 
+                      <div
                         key={block.id}
                         onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
                         className={`relative group/block border rounded p-2 cursor-pointer transition-all hover:ring-1 hover:ring-primary/45 space-y-2
@@ -1592,32 +1592,32 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                       >
                         {/* Floating controls */}
                         <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
                             disabled={idx === 0}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
                           >
                             <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
                             disabled={idx === blocks.length - 1}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
                           >
                             <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); duplicateBlock(idx); }}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary"
                             title="Duplicate block"
                           >
                             <span className="material-symbols-outlined text-[12px]">content_copy</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
                             className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-error-container/20 hover:text-error text-on-surface-variant"
                           >
@@ -1627,8 +1627,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                         <div className="grid grid-cols-2 gap-3 text-[11px] leading-relaxed">
                           {fields.map((f: any, fIdx: number) => (
                             <div key={fIdx} className="flex items-center gap-1.5 group/row hover:bg-surface-container-lowest/50 p-0.5 rounded">
-                              <input 
-                                type="text" 
+                              <input
+                                type="text"
                                 value={f.key}
                                 onChange={(e) => {
                                   const updatedFields = fields.map((field: any, i: number) => i === fIdx ? { ...field, key: e.target.value } : field);
@@ -1638,8 +1638,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                 className="w-1/3 bg-transparent text-[11px] font-bold text-on-surface focus:outline-none border-b border-transparent focus:border-primary"
                               />
                               <span className="text-on-surface-variant">:</span>
-                              <input 
-                                type="text" 
+                              <input
+                                type="text"
                                 value={f.value}
                                 onChange={(e) => {
                                   const updatedFields = fields.map((field: any, i: number) => i === fIdx ? { ...field, value: e.target.value } : field);
@@ -1648,8 +1648,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                 placeholder="Field Value"
                                 className="flex-1 bg-transparent text-[11px] text-on-surface-variant/80 focus:outline-none border-b border-transparent focus:border-primary"
                               />
-                              <button 
-                                type="button" 
+                              <button
+                                type="button"
                                 onClick={() => {
                                   const updatedFields = fields.filter((_: any, i: number) => i !== fIdx);
                                   updateBlockContent(idx, 'fields', updatedFields);
@@ -1680,7 +1680,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
               </div>
 
               {/* 4. FOOTER DETAILS BLOCK (Virtual) */}
-              <div 
+              <div
                 onClick={() => setSelectedBlockId('footer')}
                 className={`border-t pt-4 mt-8 cursor-pointer hover:ring-1 hover:ring-primary/45 rounded p-2 transition-all relative group/block
                   ${selectedBlockId === 'footer' ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-outline-variant/40'}`}
@@ -1778,17 +1778,17 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           </div>
         </main>
 
-        <aside 
+        <aside
           style={{ width: `${rightSidebarWidth}px` }}
           className="bg-surface border-l border-outline-variant flex flex-col h-full absolute right-0 top-0 shrink-0 select-none shadow-sm"
         >
           {/* Resize Handle */}
-          <div 
+          <div
             onMouseDown={startResizingRight}
             className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/25 active:bg-primary/45 transition-colors z-50"
             title="Drag to resize properties panel"
           />
-          
+
           {/* Tabs header */}
           <div className="flex border-b border-outline-variant bg-surface-container-lowest p-1 gap-1">
             {([
@@ -1811,11 +1811,11 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar text-body-sm">
-            
+
             {/* PROPERTIES TAB */}
             {activeRightTab === 'properties' && (
               <div className="space-y-4">
-                
+
                 {/* 1. If ORGANIZATION BRANDING virtual block selected */}
                 {selectedBlockId === 'org-branding' && (
                   <div className="space-y-4">
@@ -1899,6 +1899,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                     </div>
 
                     {/* Stamp / Logo settings */}
+                    <p>THis is the logo for of the company</p>
                     <div className="space-y-2">
                       <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Branding Elements</span>
                       <div className="space-y-2 border border-outline-variant/40 rounded-lg p-2.5 bg-surface-container-low/40">
@@ -1935,7 +1936,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                     </div>
 
                     <div className="h-px bg-outline-variant/60 w-full pt-1"></div>
-                    
+
                     {/* Reusable Template Trigger */}
                     <button
                       type="button"
@@ -2013,7 +2014,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                               showPageNumbers: true
                             }
                           };
-                          
+
                           const res = await api.templateEngine.createDefinition(layoutDef);
                           const updatedList = await api.templateEngine.listDefinitions();
                           setDesignerTemplates(updatedList);
@@ -2112,64 +2113,49 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                           <span className="material-symbols-outlined text-primary text-[18px]">table_chart</span>
                           <h4 className="font-bold text-[12px] text-on-surface">Pricing Table Config</h4>
                         </div>
-                        
-                                 {/* Dynamic Columns Configuration */}
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1.5 mt-1">
-                              <span className="text-[10px] text-on-surface-variant font-bold uppercase">Columns Setup</span>
-                              {activeTmpl && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const newKey = `col_${Date.now()}`;
-                                    const newCol = {
-                                      key: newKey,
-                                      label: 'New Column',
-                                      visible: true,
-                                      width: 15,
-                                      align: 'left',
-                                      order: activeTmpl.table.columns.length
-                                    };
-                                    const newCols = [...activeTmpl.table.columns, newCol];
-                                    api.templateEngine.updateDefinition(activeTmpl.meta.id, {
-                                      table: { ...activeTmpl.table, columns: newCols }
-                                    }).then(async () => {
-                                      const updated = await api.templateEngine.listDefinitions();
-                                      setDesignerTemplates(updated);
-                                    });
-                                  }}
-                                  className="text-[10px] text-primary font-bold flex items-center gap-0.5 hover:underline cursor-pointer bg-transparent border-none"
-                                >
-                                  <span className="material-symbols-outlined text-[12px]">add</span> Add
-                                </button>
-                              )}
-                            </div>
-                            
-                            <div className="space-y-3">
-                              {activeTmpl && [...activeTmpl.table.columns].sort((a,b) => a.order - b.order).map((col) => (
-                                <div key={col.key} className="border border-outline-variant/50 rounded-lg p-2.5 space-y-2 bg-surface-container-lowest/50 text-[11px] font-semibold">
-                                  <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-1.5">
-                                      <input
-                                        type="checkbox"
-                                        checked={col.visible}
-                                        onChange={(e) => {
-                                          const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, visible: e.target.checked } : c);
-                                          api.templateEngine.updateDefinition(activeTmpl.meta.id, {
-                                            table: { ...activeTmpl.table, columns: newCols }
-                                          }).then(async () => {
-                                            const updated = await api.templateEngine.listDefinitions();
-                                            setDesignerTemplates(updated);
-                                          });
-                                        }}
-                                        className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
-                                      />
-                                      <span className="font-bold text-on-surface truncate max-w-[120px]">{col.label || col.key}</span>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const newCols = activeTmpl.table.columns.filter((c: any) => c.key !== col.key);
+
+                        {/* Dynamic Columns Configuration */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1.5 mt-1">
+                            <span className="text-[10px] text-on-surface-variant font-bold uppercase">Columns Setup</span>
+                            {activeTmpl && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newKey = `col_${Date.now()}`;
+                                  const newCol = {
+                                    key: newKey,
+                                    label: 'New Column',
+                                    visible: true,
+                                    width: 15,
+                                    align: 'left',
+                                    order: activeTmpl.table.columns.length
+                                  };
+                                  const newCols = [...activeTmpl.table.columns, newCol];
+                                  api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                    table: { ...activeTmpl.table, columns: newCols }
+                                  }).then(async () => {
+                                    const updated = await api.templateEngine.listDefinitions();
+                                    setDesignerTemplates(updated);
+                                  });
+                                }}
+                                className="text-[10px] text-primary font-bold flex items-center gap-0.5 hover:underline cursor-pointer bg-transparent border-none"
+                              >
+                                <span className="material-symbols-outlined text-[12px]">add</span> Add
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="space-y-3">
+                            {activeTmpl && [...activeTmpl.table.columns].sort((a, b) => a.order - b.order).map((col) => (
+                              <div key={col.key} className="border border-outline-variant/50 rounded-lg p-2.5 space-y-2 bg-surface-container-lowest/50 text-[11px] font-semibold">
+                                <div className="flex justify-between items-center">
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="checkbox"
+                                      checked={col.visible}
+                                      onChange={(e) => {
+                                        const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, visible: e.target.checked } : c);
                                         api.templateEngine.updateDefinition(activeTmpl.meta.id, {
                                           table: { ...activeTmpl.table, columns: newCols }
                                         }).then(async () => {
@@ -2177,64 +2163,38 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                           setDesignerTemplates(updated);
                                         });
                                       }}
-                                      className="text-on-surface-variant hover:text-error cursor-pointer bg-transparent border-none"
-                                      title="Delete Column"
-                                    >
-                                      <span className="material-symbols-outlined text-[14px]">delete</span>
-                                    </button>
+                                      className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
+                                    />
+                                    <span className="font-bold text-on-surface truncate max-w-[120px]">{col.label || col.key}</span>
                                   </div>
-                                  
-                                  {col.visible && (
-                                    <div className="space-y-2 text-body-sm mt-1">
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <div className="flex flex-col gap-0.5">
-                                          <span className="text-[9px] text-on-surface-variant uppercase font-bold">Rename Label</span>
-                                          <input
-                                            type="text"
-                                            value={col.label}
-                                            onChange={(e) => {
-                                              const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, label: e.target.value } : c);
-                                              api.templateEngine.updateDefinition(activeTmpl.meta.id, {
-                                                table: { ...activeTmpl.table, columns: newCols }
-                                              }).then(async () => {
-                                                const updated = await api.templateEngine.listDefinitions();
-                                                setDesignerTemplates(updated);
-                                              });
-                                            }}
-                                            className="px-1.5 py-0.8 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[10px]"
-                                          />
-                                        </div>
-                                        <div className="flex flex-col gap-0.5">
-                                          <span className="text-[9px] text-on-surface-variant uppercase font-bold">Align</span>
-                                          <select
-                                            value={col.align || 'left'}
-                                            onChange={(e) => {
-                                              const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, align: e.target.value } : c);
-                                              api.templateEngine.updateDefinition(activeTmpl.meta.id, {
-                                                table: { ...activeTmpl.table, columns: newCols }
-                                              }).then(async () => {
-                                                const updated = await api.templateEngine.listDefinitions();
-                                                setDesignerTemplates(updated);
-                                              });
-                                            }}
-                                            className="px-1.5 py-0.8 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[11px] text-on-surface font-semibold cursor-pointer"
-                                          >
-                                            <option value="left">Left</option>
-                                            <option value="center">Center</option>
-                                            <option value="right">Right</option>
-                                          </select>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="flex flex-col gap-0.5 font-mono">
-                                        <span className="text-[9px] text-on-surface-variant uppercase font-bold">Width: {col.width}%</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newCols = activeTmpl.table.columns.filter((c: any) => c.key !== col.key);
+                                      api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                        table: { ...activeTmpl.table, columns: newCols }
+                                      }).then(async () => {
+                                        const updated = await api.templateEngine.listDefinitions();
+                                        setDesignerTemplates(updated);
+                                      });
+                                    }}
+                                    className="text-on-surface-variant hover:text-error cursor-pointer bg-transparent border-none"
+                                    title="Delete Column"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">delete</span>
+                                  </button>
+                                </div>
+
+                                {col.visible && (
+                                  <div className="space-y-2 text-body-sm mt-1">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className="flex flex-col gap-0.5">
+                                        <span className="text-[9px] text-on-surface-variant uppercase font-bold">Rename Label</span>
                                         <input
-                                          type="range"
-                                          min="5"
-                                          max="70"
-                                          value={col.width}
+                                          type="text"
+                                          value={col.label}
                                           onChange={(e) => {
-                                            const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, width: Number(e.target.value) || 10 } : c);
+                                            const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, label: e.target.value } : c);
                                             api.templateEngine.updateDefinition(activeTmpl.meta.id, {
                                               table: { ...activeTmpl.table, columns: newCols }
                                             }).then(async () => {
@@ -2242,65 +2202,106 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                               setDesignerTemplates(updated);
                                             });
                                           }}
-                                          className="w-full accent-primary h-1 bg-surface-variant rounded appearance-none cursor-pointer"
+                                          className="px-1.5 py-0.8 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[10px]"
                                         />
                                       </div>
+                                      <div className="flex flex-col gap-0.5">
+                                        <span className="text-[9px] text-on-surface-variant uppercase font-bold">Align</span>
+                                        <select
+                                          value={col.align || 'left'}
+                                          onChange={(e) => {
+                                            const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, align: e.target.value } : c);
+                                            api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                              table: { ...activeTmpl.table, columns: newCols }
+                                            }).then(async () => {
+                                              const updated = await api.templateEngine.listDefinitions();
+                                              setDesignerTemplates(updated);
+                                            });
+                                          }}
+                                          className="px-1.5 py-0.8 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[11px] text-on-surface font-semibold cursor-pointer"
+                                        >
+                                          <option value="left">Left</option>
+                                          <option value="center">Center</option>
+                                          <option value="right">Right</option>
+                                        </select>
+                                      </div>
                                     </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
+
+                                    <div className="flex flex-col gap-0.5 font-mono">
+                                      <span className="text-[9px] text-on-surface-variant uppercase font-bold">Width: {col.width}%</span>
+                                      <input
+                                        type="range"
+                                        min="5"
+                                        max="70"
+                                        value={col.width}
+                                        onChange={(e) => {
+                                          const newCols = activeTmpl.table.columns.map((c: any) => c.key === col.key ? { ...c, width: Number(e.target.value) || 10 } : c);
+                                          api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                            table: { ...activeTmpl.table, columns: newCols }
+                                          }).then(async () => {
+                                            const updated = await api.templateEngine.listDefinitions();
+                                            setDesignerTemplates(updated);
+                                          });
+                                        }}
+                                        className="w-full accent-primary h-1 bg-surface-variant rounded appearance-none cursor-pointer"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Pricing adjustments */}
+                        <div className="space-y-3">
+                          <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Pricing Adjustments</span>
+                          <div className="space-y-2.5 border border-outline-variant/40 rounded-lg p-2.5 bg-surface-container-low/40">
+                            <label className="flex items-center gap-2 font-semibold">
+                              <input
+                                type="checkbox"
+                                checked={fieldVisibility.applyDiscount}
+                                onChange={(e) => setFieldVisibility(prev => ({ ...prev, applyDiscount: e.target.checked }))}
+                                className="rounded text-primary focus:ring-primary h-4 w-4"
+                              />
+                              Apply Discount Row
+                            </label>
+                            <label className="flex items-center gap-2 font-semibold">
+                              <input
+                                type="checkbox"
+                                checked={fieldVisibility.applyAdjustment}
+                                onChange={(e) => setFieldVisibility(prev => ({ ...prev, applyAdjustment: e.target.checked }))}
+                                className="rounded text-primary focus:ring-primary h-4 w-4"
+                              />
+                              Apply Adjustment Row
+                            </label>
                           </div>
 
-                         {/* Pricing adjustments */}
-                         <div className="space-y-3">
-                           <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Pricing Adjustments</span>
-                           <div className="space-y-2.5 border border-outline-variant/40 rounded-lg p-2.5 bg-surface-container-low/40">
-                             <label className="flex items-center gap-2 font-semibold">
-                               <input
-                                 type="checkbox"
-                                 checked={fieldVisibility.applyDiscount}
-                                 onChange={(e) => setFieldVisibility(prev => ({ ...prev, applyDiscount: e.target.checked }))}
-                                 className="rounded text-primary focus:ring-primary h-4 w-4"
-                               />
-                               Apply Discount Row
-                             </label>
-                             <label className="flex items-center gap-2 font-semibold">
-                               <input
-                                 type="checkbox"
-                                 checked={fieldVisibility.applyAdjustment}
-                                 onChange={(e) => setFieldVisibility(prev => ({ ...prev, applyAdjustment: e.target.checked }))}
-                                 className="rounded text-primary focus:ring-primary h-4 w-4"
-                               />
-                               Apply Adjustment Row
-                             </label>
-                           </div>
-
-                           <div className="grid grid-cols-2 gap-2">
-                             {fieldVisibility.applyDiscount && (
-                               <div className="flex flex-col gap-0.5 animate-fade-in">
-                                 <label className="text-[9px] text-on-surface-variant font-bold uppercase">Discount (₹)</label>
-                                 <input
-                                   type="number"
-                                   value={block.content?.discount || 0}
-                                   onChange={(e) => updateBlockContent(blockIdx, 'discount', Number(e.target.value) || 0)}
-                                   className="h-8 px-2 border border-outline-variant rounded bg-surface font-semibold text-[11px] font-mono"
-                                 />
-                               </div>
-                             )}
-                             {fieldVisibility.applyAdjustment && (
-                               <div className="flex flex-col gap-0.5 animate-fade-in">
-                                 <label className="text-[9px] text-on-surface-variant font-bold uppercase">Adjustment (₹)</label>
-                                 <input
-                                   type="number"
-                                   value={block.content?.adjustment || 0}
-                                   onChange={(e) => updateBlockContent(blockIdx, 'adjustment', Number(e.target.value) || 0)}
-                                   className="h-8 px-2 border border-outline-variant rounded bg-surface font-semibold text-[11px] font-mono"
-                                 />
-                               </div>
-                             )}
-                           </div>
-                         </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {fieldVisibility.applyDiscount && (
+                              <div className="flex flex-col gap-0.5 animate-fade-in">
+                                <label className="text-[9px] text-on-surface-variant font-bold uppercase">Discount (₹)</label>
+                                <input
+                                  type="number"
+                                  value={block.content?.discount || 0}
+                                  onChange={(e) => updateBlockContent(blockIdx, 'discount', Number(e.target.value) || 0)}
+                                  className="h-8 px-2 border border-outline-variant rounded bg-surface font-semibold text-[11px] font-mono"
+                                />
+                              </div>
+                            )}
+                            {fieldVisibility.applyAdjustment && (
+                              <div className="flex flex-col gap-0.5 animate-fade-in">
+                                <label className="text-[9px] text-on-surface-variant font-bold uppercase">Adjustment (₹)</label>
+                                <input
+                                  type="number"
+                                  value={block.content?.adjustment || 0}
+                                  onChange={(e) => updateBlockContent(blockIdx, 'adjustment', Number(e.target.value) || 0)}
+                                  className="h-8 px-2 border border-outline-variant rounded bg-surface font-semibold text-[11px] font-mono"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     );
                   }
@@ -2565,7 +2566,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
             {/* STYLES TAB */}
             {activeRightTab === 'styles' && (
               <div className="space-y-4">
-                
+
                 {/* Apply from Templates list */}
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] text-on-surface-variant font-bold uppercase">Apply Layout Theme</label>
@@ -2609,21 +2610,21 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
             {/* VERSIONS TAB */}
             {activeRightTab === 'versions' && (
               <div className="space-y-4">
-                
+
                 {/* Save current landmark snapshot */}
                 <form onSubmit={handleCreateSnapshot} className="space-y-2 border-b border-outline-variant/60 pb-3">
                   <label className="text-[10px] text-on-surface-variant font-bold uppercase block">Create Landmark Revision</label>
                   <div className="flex gap-1.5">
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Major updates" 
+                    <input
+                      type="text"
+                      placeholder="e.g. Major updates"
                       value={newSnapshotTitle}
                       onChange={(e) => setNewSnapshotTitle(e.target.value)}
                       required
                       className="flex-1 h-7 px-2 border border-outline-variant rounded bg-surface-container-low text-[11px]"
                     />
-                    <button 
-                      type="submit" 
+                    <button
+                      type="submit"
                       className="bg-primary text-on-primary hover:bg-primary-fixed-variant transition-colors font-bold px-2 rounded text-[11px] h-7 active:scale-95"
                     >
                       Save
@@ -2638,8 +2639,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                     <div className="text-center text-[10px] text-on-surface-variant italic py-4">No landmark snapshots logged.</div>
                   ) : (
                     versions.map((ver) => (
-                      <div 
-                        key={ver.id} 
+                      <div
+                        key={ver.id}
                         className="flex justify-between items-center p-2 bg-surface-container-low border border-outline-variant/60 rounded-lg"
                       >
                         <div className="min-w-0 pr-2">
@@ -2665,10 +2666,10 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
             {/* EXPORT TAB */}
             {activeRightTab === 'export' && (
               <div className="space-y-4 select-none">
-                
+
                 <div className="space-y-3">
                   <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Template Design Layout</span>
-                  
+
                   {designerTemplates.length === 0 ? (
                     <div className="text-[10px] text-on-surface-variant italic">
                       No custom layouts defined in Template Designer.
@@ -2748,11 +2749,11 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                 {/* Email Preparation Form */}
                 <form onSubmit={handleSendEmail} className="space-y-3">
                   <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Dispatch via Email</span>
-                  
+
                   <div className="flex flex-col gap-1">
                     <label className="text-[9px] text-on-surface-variant font-bold uppercase">Recipient Email</label>
-                    <input 
-                      type="email" 
+                    <input
+                      type="email"
                       value={emailRecipient}
                       onChange={(e) => setEmailRecipient(e.target.value)}
                       placeholder="client@company.com"
@@ -2763,8 +2764,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
 
                   <div className="flex flex-col gap-1">
                     <label className="text-[9px] text-on-surface-variant font-bold uppercase">Subject Header</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={emailSubject}
                       onChange={(e) => setEmailSubject(e.target.value)}
                       placeholder="Document invoice"
@@ -2775,7 +2776,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
 
                   <div className="flex flex-col gap-1">
                     <label className="text-[9px] text-on-surface-variant font-bold uppercase">Message body</label>
-                    <textarea 
+                    <textarea
                       value={emailMessage}
                       onChange={(e) => setEmailMessage(e.target.value)}
                       placeholder="Email description details"
@@ -2802,11 +2803,11 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
 
           {/* Toast Alert overlay */}
           {toastMsg && (
-            <div 
+            <div
               style={{ borderLeft: `4px solid ${toastError ? '#b3261e' : '#6750a4'}` }}
               className="p-3 bg-surface-container border border-outline-variant shadow-lg rounded-md m-4 flex items-center gap-2 select-none"
             >
-              <span 
+              <span
                 className="material-symbols-outlined text-[18px]"
                 style={{ color: toastError ? '#b3261e' : '#6750a4' }}
               >
