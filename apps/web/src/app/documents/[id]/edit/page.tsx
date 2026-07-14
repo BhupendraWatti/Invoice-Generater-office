@@ -17,7 +17,7 @@ import Link from 'next/link';
 interface DocumentBlockInput {
   id: string;
   sortOrder: number;
-  blockType: 'COVER' | 'TEXT' | 'TABLE' | 'NOTES';
+  blockType: 'COVER' | 'TEXT' | 'TABLE' | 'NOTES' | 'CUSTOM_FIELDS';
   content: any; // Mapped JSON parameters
 }
 
@@ -68,6 +68,45 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
 
   // Version snapshot label
   const [newSnapshotTitle, setNewSnapshotTitle] = useState<string>('');
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [designerTemplates, setDesignerTemplates] = useState<any[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [pageSettings, setPageSettings] = useState({
+    size: 'A4',
+    orientation: 'portrait',
+    margins: 'normal',
+    marginTop: 36,
+    marginRight: 36,
+    marginBottom: 36,
+    marginLeft: 36
+  });
+  const [fieldVisibility, setFieldVisibility] = useState({
+    showOrgTaxId: true,
+    showOrgPhone: true,
+    showOrgEmail: true,
+    showOrgAddress: true,
+    showCustTax: true,
+    showCustPhone: true,
+    showCustEmail: true,
+    showCustAddress: true,
+    showTableSku: true,
+    showTableTaxCode: true,
+    showTableType: true,
+    logoUrl: '',
+    qrUrl: '',
+    applyDiscount: false,
+    applyAdjustment: false,
+    showPaymentInstructions: true,
+    showBankDetails: true,
+    showSignature: true,
+    showFooter: true
+  });
+
+  const handleSelectBlock = (blockId: string) => {
+    setSelectedBlockId(blockId);
+    setActiveRightTab('properties');
+  };
 
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -75,14 +114,16 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
   const loadDependencies = async () => {
     setLoading(true);
     try {
-      const [docData, compList, custList, prodList, taxList, unitList, versionList] = await Promise.all([
+      const [docData, compList, custList, prodList, taxList, unitList, versionList, templateList, designerTemplateList] = await Promise.all([
         api.documents.get(id),
         api.companies.list(),
         api.customers.list(),
         api.products.list(),
         api.taxes.list(),
         api.units.list(),
-        api.documents.listVersions(id)
+        api.documents.listVersions(id),
+        api.templates.list(),
+        api.templateEngine.listDefinitions()
       ]);
 
       setDoc(docData);
@@ -91,6 +132,17 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
       setSelectedCompanyId(docData.companyId || '');
       setSelectedCustomerId(docData.customerId || '');
       setVersions(versionList);
+      setTemplates(templateList);
+      
+      setDesignerTemplates(designerTemplateList);
+      const defaultTmpl = designerTemplateList.find(t => t.meta.isDefault) || designerTemplateList[0];
+      setSelectedTemplateId(docData.templateId || (defaultTmpl ? defaultTmpl.meta.id : ''));
+
+      setAccentColor(docData.accentColor || '#3b82f6');
+      setFontFamily(docData.fontFamily || 'font-sans');
+      setShowWatermark(docData.showWatermark || false);
+      setWatermarkText(docData.watermarkText || 'DRAFT');
+      setShowStamp(docData.showStamp || false);
 
       setCompanies(compList);
       setCustomers(custList);
@@ -113,7 +165,12 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           blockType: b.blockType as any,
           content: typeof b.content === 'string' ? JSON.parse(b.content) : b.content
         }));
-        setBlocks(mapped);
+        const configBlock = mapped.find(b => b.content?.isGlobalConfig);
+        if (configBlock) {
+          if (configBlock.content.pageSettings) setPageSettings(configBlock.content.pageSettings);
+          if (configBlock.content.fieldVisibility) setFieldVisibility(configBlock.content.fieldVisibility);
+        }
+        setBlocks(mapped.filter(b => !b.content?.isGlobalConfig));
       } else {
         // Build initial structure matching Stitch defaults
         setBlocks([
@@ -159,6 +216,15 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
     loadDependencies();
   }, [id]);
 
+  const isFirstMount = useRef(true);
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    triggerAutoSave(blocks);
+  }, [pageSettings, fieldVisibility, accentColor, fontFamily, showWatermark, watermarkText, showStamp, selectedTemplateId]);
+
   // Toast notifier
   const triggerToast = (msg: string, isErr = false) => {
     setToastMsg(msg);
@@ -169,29 +235,48 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
   };
 
   // Save changes logic
-  const handleSaveBlocks = async (blocksPayload: DocumentBlockInput[], currentTitle = title) => {
-    setSaving(true);
+  const handleSaveBlocks = async (blocksPayload: DocumentBlockInput[], currentTitle = title, silent = false) => {
+    if (!silent) setSaving(true);
     try {
-      const serialized = blocksPayload.map(b => ({
+      const configBlock: DocumentBlockInput = {
+        id: 'b-global-config',
+        sortOrder: 9999,
+        blockType: 'CUSTOM_FIELDS',
+        content: {
+          isGlobalConfig: true,
+          pageSettings,
+          fieldVisibility
+        }
+      };
+      
+      const fullPayload = [...blocksPayload, configBlock];
+      
+      const serialized = fullPayload.map(b => ({
         sortOrder: b.sortOrder,
         blockType: b.blockType,
         content: JSON.stringify(b.content)
       }));
-      await api.documents.updateBlocks(id, serialized);
       
-      // Update title, company/customer references if changed
-      const docPayload = {
-        title: currentTitle,
-        companyId: selectedCompanyId || undefined,
-        customerId: selectedCustomerId || undefined
-      };
-      // Mock call update or local api update logic
-      // For type safety, we write custom blocks first.
-      triggerToast('Draft saved successfully.');
+      await Promise.all([
+        api.documents.updateBlocks(id, serialized),
+        api.documents.update(id, {
+          title: currentTitle,
+          companyId: selectedCompanyId || null,
+          customerId: selectedCustomerId || null,
+          accentColor,
+          fontFamily,
+          showWatermark,
+          watermarkText,
+          showStamp,
+          templateId: selectedTemplateId || null,
+        })
+      ]);
+      
+      if (!silent) triggerToast('Draft saved successfully.');
     } catch (err: any) {
-      triggerToast(err.message || 'Auto-save failed.', true);
+      if (!silent) triggerToast(err.message || 'Auto-save failed.', true);
     } finally {
-      setSaving(false);
+      if (!silent) setSaving(false);
     }
   };
 
@@ -229,7 +314,23 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
     triggerAutoSave(filtered);
   };
 
-  const addBlockSection = (type: 'COVER' | 'TEXT' | 'TABLE' | 'NOTES') => {
+  const duplicateBlock = (idx: number) => {
+    const target = blocks[idx];
+    const copy = {
+      ...target,
+      id: `b-custom-${Date.now()}`,
+      content: JSON.parse(JSON.stringify(target.content))
+    };
+    const appended = [...blocks];
+    appended.splice(idx + 1, 0, copy);
+    const reindexed = appended.map((b, i) => ({ ...b, sortOrder: i }));
+    setBlocks(reindexed);
+    triggerAutoSave(reindexed);
+    setSelectedBlockId(copy.id);
+    triggerToast('Section block duplicated.');
+  };
+
+  const addBlockSection = (type: 'COVER' | 'TEXT' | 'TABLE' | 'NOTES' | 'CUSTOM_FIELDS') => {
     let initialContent: any = {};
     if (type === 'COVER') {
       initialContent = { subtitle: 'Document section', date: new Date().toLocaleDateString(), logoUrl: '' };
@@ -239,6 +340,8 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
       initialContent = { items: [{ sku: '', description: 'Custom item name', quantity: 1, rate: 0, unit: 'PCS', taxCode: 'EXEMPT' }], discount: 0, adjustment: 0 };
     } else if (type === 'NOTES') {
       initialContent = { notes: 'Add footnote annotations.' };
+    } else if (type === 'CUSTOM_FIELDS') {
+      initialContent = { fields: [{ key: 'GSTIN', value: '' }] };
     }
 
     const appended = [...blocks, {
@@ -255,7 +358,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
   const updateBlockContent = (idx: number, key: string, val: any) => {
     const updated = blocks.map((b, i) => {
       if (i === idx) {
-        return { ...b, content: { ...b.content, [key]: val } };
+        return { ...b, content: { ...(b.content || {}), [key]: val } };
       }
       return b;
     });
@@ -266,20 +369,20 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
   // Line Items spreadsheet calculator operations
   const addLineItem = (blockIdx: number) => {
     const targetBlock = blocks[blockIdx];
-    const items = [...(targetBlock.content.items || [])];
+    const items = [...(targetBlock.content?.items || [])];
     items.push({ sku: '', description: '', quantity: 1, rate: 0, unit: 'PCS', taxCode: 'EXEMPT' });
     updateBlockContent(blockIdx, 'items', items);
   };
 
   const removeLineItem = (blockIdx: number, itemIdx: number) => {
     const targetBlock = blocks[blockIdx];
-    const items = (targetBlock.content.items || []).filter((_: any, i: number) => i !== itemIdx);
+    const items = (targetBlock.content?.items || []).filter((_: any, i: number) => i !== itemIdx);
     updateBlockContent(blockIdx, 'items', items);
   };
 
   const updateLineItemField = (blockIdx: number, itemIdx: number, key: string, val: any) => {
     const targetBlock = blocks[blockIdx];
-    const items = (targetBlock.content.items || []).map((item: any, i: number) => {
+    const items = (targetBlock.content?.items || []).map((item: any, i: number) => {
       if (i === itemIdx) {
         const next = { ...item, [key]: val };
         
@@ -301,6 +404,32 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
     updateBlockContent(blockIdx, 'items', items);
   };
 
+  const handleSaveProductToMaster = async (sku: string, description: string, rate: number, unitCode: string, taxCode: string) => {
+    if (!sku.trim()) {
+      triggerToast('SKU is required to save to master.', true);
+      return;
+    }
+    try {
+      const matchedUnit = units.find(u => u.code === unitCode) || units[0];
+      const matchedTax = taxes.find(t => t.code === taxCode) || taxes[0];
+      
+      await api.products.create({
+        sku: sku,
+        name: description || sku,
+        description: description,
+        rate: Number(rate) || 0,
+        unitId: matchedUnit?.id,
+        taxId: matchedTax?.id
+      });
+      
+      const updatedList = await api.products.list();
+      setProducts(updatedList);
+      triggerToast(`Product "${sku}" successfully added to master!`);
+    } catch (e: any) {
+      triggerToast(e.message || 'Failed to save product to master.', true);
+    }
+  };
+
   // Calculate live totals for a table block
   const calculateTotals = (blockContent: any) => {
     const items = blockContent.items || [];
@@ -308,18 +437,19 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
     let taxTotal = 0;
 
     items.forEach((item: any) => {
-      const lineVal = (Number(item.quantity) || 0) * (Number(item.rate) || 0);
+      const lineVal = Number(item.rate) || 0;
       subtotal += lineVal;
 
-      // GST tax configuration rates matching
-      const matchedTax = taxes.find(t => t.code === item.taxCode);
-      if (matchedTax) {
-        taxTotal += lineVal * (matchedTax.ratePercent / 100);
-      }
+      const ratePercent = item.taxRate !== undefined ? Number(item.taxRate) : (() => {
+        const matchedTax = taxes.find(t => t.code === item.taxCode);
+        return matchedTax ? matchedTax.ratePercent : 0;
+      })();
+
+      taxTotal += lineVal * (ratePercent / 100);
     });
 
-    const discount = Number(blockContent.discount) || 0;
-    const adjustment = Number(blockContent.adjustment) || 0;
+    const discount = fieldVisibility.applyDiscount ? (Number(blockContent.discount) || 0) : 0;
+    const adjustment = fieldVisibility.applyAdjustment ? (Number(blockContent.adjustment) || 0) : 0;
     const total = subtotal + taxTotal - discount + adjustment;
 
     return { subtotal, taxTotal, total };
@@ -392,6 +522,33 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
     }
   };
 
+  // Download real customized layout templates from Template Designer
+  const handleDownloadDesignerFile = async (format: 'pdf' | 'docx') => {
+    if (!selectedTemplateId) {
+      triggerToast('Please select a template layout from the custom designer.', true);
+      return;
+    }
+    try {
+      await handleSaveBlocks(blocks, title, true);
+      const res = await api.templateEngine.render(id, selectedTemplateId, format);
+      const binaryStr = window.atob(res.base64);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: res.mimeType });
+      const downloadLink = document.createElement('a');
+      downloadLink.href = window.URL.createObjectURL(blob);
+      downloadLink.download = res.filename;
+      downloadLink.click();
+      triggerToast(`${format.toUpperCase()} export compiled successfully.`);
+    } catch (err: any) {
+      console.error(err);
+      triggerToast(err.message || 'Export compilation failed.', true);
+    }
+  };
+
   // Send Email Trigger
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -420,8 +577,66 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
     );
   }
 
+  const activeTmpl = designerTemplates.find(t => t.meta.id === selectedTemplateId) || designerTemplates[0];
+
   return (
     <MainLayout>
+      <style>{`
+        @media print {
+          /* Hide all layout elements */
+          header, aside, nav, button, .no-print, .add-block-trigger, .block-actions-toolbar, .print-hide {
+            display: none !important;
+          }
+          
+          main {
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: visible !important;
+            width: 100% !important;
+          }
+          
+          body * {
+            visibility: hidden;
+          }
+          
+          #print-sheet, #print-sheet * {
+            visibility: visible;
+          }
+          
+          #print-sheet {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+            color: black !important;
+          }
+          
+          #print-sheet input, 
+          #print-sheet select, 
+          #print-sheet textarea {
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            color: black !important;
+            outline: none !important;
+            box-shadow: none !important;
+            width: auto !important;
+            appearance: none !important;
+          }
+          
+          #print-sheet table select {
+            appearance: none !important;
+            background-image: none !important;
+          }
+        }
+      `}</style>
       <div className="flex h-full w-full bg-background overflow-hidden relative">
         
         {/* ======================================================== */}
@@ -434,20 +649,23 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
           </div>
 
           {/* Section structure sorting sequence */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-3 space-y-1.5 custom-scrollbar">
             {blocks.map((block, idx) => (
               <div 
                 key={block.id} 
-                className="group flex flex-col p-2.5 bg-surface-container-low border border-outline-variant/60 rounded-lg hover:border-primary/45 transition-all"
+                onClick={() => setSelectedBlockId(block.id)}
+                className={`group flex flex-col p-2 bg-surface-container-low border rounded-lg cursor-pointer hover:border-primary/45 transition-all
+                  ${selectedBlockId === block.id ? 'border-primary bg-primary-container/10 shadow-xs' : 'border-outline-variant/60'}`}
               >
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="material-symbols-outlined text-primary text-[16px]">
+                    <span className="material-symbols-outlined text-primary text-[15px]">
                       {block.blockType === 'COVER' ? 'branding_watermark' : 
                        block.blockType === 'TEXT' ? 'notes' : 
-                       block.blockType === 'TABLE' ? 'table_chart' : 'description'}
+                       block.blockType === 'TABLE' ? 'table_chart' : 
+                       block.blockType === 'CUSTOM_FIELDS' ? 'dashboard_customize' : 'description'}
                     </span>
-                    <span className="text-[11px] font-bold text-on-surface truncate">
+                    <span className="text-[10.5px] font-bold text-on-surface truncate">
                       {block.blockType} #{idx + 1}
                     </span>
                   </div>
@@ -455,24 +673,24 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   {/* Sorting triggers */}
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button 
-                      onClick={() => moveBlock(idx, 'UP')}
+                      onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
                       disabled={idx === 0}
                       className="p-0.5 hover:bg-surface-container rounded text-on-surface-variant hover:text-primary disabled:opacity-30"
                     >
-                      <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
+                      <span className="material-symbols-outlined text-[11px]">arrow_upward</span>
                     </button>
                     <button 
-                      onClick={() => moveBlock(idx, 'DOWN')}
+                      onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
                       disabled={idx === blocks.length - 1}
                       className="p-0.5 hover:bg-surface-container rounded text-on-surface-variant hover:text-primary disabled:opacity-30"
                     >
-                      <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+                      <span className="material-symbols-outlined text-[11px]">arrow_downward</span>
                     </button>
                     <button 
-                      onClick={() => removeBlock(idx)}
+                      onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
                       className="p-0.5 hover:bg-surface-container rounded text-on-surface-variant hover:text-error"
                     >
-                      <span className="material-symbols-outlined text-[12px]">delete</span>
+                      <span className="material-symbols-outlined text-[11px]">delete</span>
                     </button>
                   </div>
                 </div>
@@ -486,28 +704,143 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
             <div className="grid grid-cols-2 gap-1.5 text-body-sm font-semibold">
               <button 
                 onClick={() => addBlockSection('TEXT')}
-                className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[11px] flex items-center justify-center gap-1"
+                className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[10.5px] flex items-center justify-center gap-1"
               >
-                <span className="material-symbols-outlined text-[14px]">notes</span> Text
+                <span className="material-symbols-outlined text-[13px]">notes</span> Text
               </button>
               <button 
                 onClick={() => addBlockSection('TABLE')}
-                className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[11px] flex items-center justify-center gap-1"
+                className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[10.5px] flex items-center justify-center gap-1"
               >
-                <span className="material-symbols-outlined text-[14px]">table_chart</span> Pricing
+                <span className="material-symbols-outlined text-[13px]">table_chart</span> Pricing
               </button>
               <button 
                 onClick={() => addBlockSection('NOTES')}
-                className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[11px] flex items-center justify-center gap-1"
+                className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[10.5px] flex items-center justify-center gap-1"
               >
-                <span className="material-symbols-outlined text-[14px]">description</span> Notes
+                <span className="material-symbols-outlined text-[13px]">description</span> Notes
               </button>
               <button 
                 onClick={() => addBlockSection('COVER')}
-                className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[11px] flex items-center justify-center gap-1"
+                className="py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[10.5px] flex items-center justify-center gap-1"
               >
-                <span className="material-symbols-outlined text-[14px]">branding_watermark</span> Branding
+                <span className="material-symbols-outlined text-[13px]">branding_watermark</span> Branding
               </button>
+              <button 
+                onClick={() => addBlockSection('CUSTOM_FIELDS')}
+                className="col-span-2 py-1 px-2 border border-outline-variant hover:bg-surface-container-low rounded text-[10.5px] flex items-center justify-center gap-1 bg-primary-container/10 border-primary/20 text-primary"
+              >
+                <span className="material-symbols-outlined text-[13px]">dashboard_customize</span> Custom Fields
+              </button>
+            </div>
+          </div>
+
+          {/* Page Settings Card */}
+          <div className="p-3 border-t border-outline-variant bg-surface-container-low/40 space-y-2">
+            <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider block">Page Layout Settings</span>
+            <div className="space-y-2 text-[10.5px]">
+              
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[8.5px] text-on-surface-variant font-bold uppercase">Format Size</label>
+                <select
+                  value={pageSettings.size}
+                  onChange={(e) => setPageSettings(prev => ({ ...prev, size: e.target.value }))}
+                  className="w-full h-9 px-2 text-[11px] border border-outline-variant rounded bg-surface text-on-surface focus:outline-none"
+                >
+                  <option value="A4">A4 (210 x 297 mm)</option>
+                  <option value="Letter">US Letter (8.5 x 11 in)</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[8.5px] text-on-surface-variant font-bold uppercase">Orientation</label>
+                <div className="grid grid-cols-2 gap-1 mt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setPageSettings(prev => ({ ...prev, orientation: 'portrait' }))}
+                    className={`h-8.5 rounded border font-semibold text-[9.5px] flex items-center justify-center gap-0.5 transition-all
+                      ${pageSettings.orientation === 'portrait' ? 'bg-primary-container border-primary text-primary' : 'bg-surface border-outline-variant hover:bg-surface-container-low text-on-surface-variant'}`}
+                  >
+                    <span className="material-symbols-outlined text-[13px]">portrait</span> Portrait
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPageSettings(prev => ({ ...prev, orientation: 'landscape' }))}
+                    className={`h-8.5 rounded border font-semibold text-[9.5px] flex items-center justify-center gap-0.5 transition-all
+                      ${pageSettings.orientation === 'landscape' ? 'bg-primary-container border-primary text-primary' : 'bg-surface border-outline-variant hover:bg-surface-container-low text-on-surface-variant'}`}
+                  >
+                    <span className="material-symbols-outlined text-[13px]">landscape</span> Landscape
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[8.5px] text-on-surface-variant font-bold uppercase">Margins Preset</label>
+                <select
+                  value={pageSettings.margins}
+                  onChange={(e) => {
+                    const preset = e.target.value;
+                    let top = 36, right = 36, bottom = 36, left = 36;
+                    if (preset === 'narrow') {
+                      top = 18; right = 18; bottom = 18; left = 18;
+                    } else if (preset === 'wide') {
+                      top = 54; right = 54; bottom = 54; left = 54;
+                    }
+                    setPageSettings(prev => ({
+                      ...prev,
+                      margins: preset,
+                      marginTop: top,
+                      marginRight: right,
+                      marginBottom: bottom,
+                      marginLeft: left
+                    }));
+                  }}
+                  className="w-full h-9 px-2 text-[11px] border border-outline-variant rounded bg-surface text-on-surface focus:outline-none"
+                >
+                  <option value="normal">Normal (36 pt)</option>
+                  <option value="narrow">Narrow (18 pt)</option>
+                  <option value="wide">Wide (54 pt)</option>
+                  <option value="custom">Custom Sliders</option>
+                </select>
+              </div>
+
+              {pageSettings.margins === 'custom' && (
+                <div className="space-y-1.5 pt-1.5 border-t border-outline-variant/35 mt-1">
+                  <div className="flex justify-between items-center text-[9px]">
+                    <span className="text-on-surface-variant font-mono">T: {pageSettings.marginTop}pt</span>
+                    <input 
+                      type="range" min="10" max="100" value={pageSettings.marginTop}
+                      onChange={(e) => setPageSettings(prev => ({ ...prev, marginTop: Number(e.target.value) }))}
+                      className="w-24 accent-primary h-1"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-[9px]">
+                    <span className="text-on-surface-variant font-mono">R: {pageSettings.marginRight}pt</span>
+                    <input 
+                      type="range" min="10" max="100" value={pageSettings.marginRight}
+                      onChange={(e) => setPageSettings(prev => ({ ...prev, marginRight: Number(e.target.value) }))}
+                      className="w-24 accent-primary h-1"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-[9px]">
+                    <span className="text-on-surface-variant font-mono">B: {pageSettings.marginBottom}pt</span>
+                    <input 
+                      type="range" min="10" max="100" value={pageSettings.marginBottom}
+                      onChange={(e) => setPageSettings(prev => ({ ...prev, marginBottom: Number(e.target.value) }))}
+                      className="w-24 accent-primary h-1"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-[9px]">
+                    <span className="text-on-surface-variant font-mono">L: {pageSettings.marginLeft}pt</span>
+                    <input 
+                      type="range" min="10" max="100" value={pageSettings.marginLeft}
+                      onChange={(e) => setPageSettings(prev => ({ ...prev, marginLeft: Number(e.target.value) }))}
+                      className="w-24 accent-primary h-1"
+                    />
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
         </aside>
@@ -516,7 +849,7 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
         {/* CENTER PANE: EDITABLE DOCUMENT CANVAS */}
         {/* ======================================================== */}
         <main className="flex-1 overflow-y-auto p-8 h-full custom-scrollbar pr-[374px]">
-          <div className="max-w-3xl mx-auto flex flex-col gap-6 pb-24">
+          <div className="max-w-[1400px] mx-auto flex flex-col gap-6 pb-24">
             
             {/* Action title toolbar */}
             <div className="flex justify-between items-center border-b border-outline-variant/60 pb-3 select-none">
@@ -540,64 +873,301 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                 <button 
                   onClick={() => handleSaveBlocks(blocks, title)}
                   disabled={saving}
-                  className="bg-primary text-on-primary hover:bg-primary-fixed-variant transition-colors text-body-sm font-semibold h-8 px-4 rounded flex items-center gap-1 disabled:opacity-50"
+                  className="bg-primary text-on-primary hover:bg-primary-fixed-variant transition-colors text-body-sm font-bold h-8 px-4 rounded flex items-center gap-1 disabled:opacity-50 shadow-sm active:scale-95"
                 >
-                  <span className="material-symbols-outlined text-[16px]">save</span>
+                  <span className="material-symbols-outlined text-[15px]">save</span>
                   {saving ? 'Saving...' : 'Save Draft'}
                 </button>
               </div>
             </div>
 
-            {/* Document Canvas Sheet Wrapper */}
+            {/* Document Canvas Sheet Wrapper (WYSIWYG A4 Print Layout Editor) */}
             <div 
-              style={{ borderColor: accentColor }}
-              className={`bg-surface border-t-8 rounded-lg shadow-md p-8 relative overflow-hidden ${fontFamily} min-h-[850px]`}
+              id="print-sheet"
+              style={{
+                borderColor: accentColor,
+                paddingTop: `${pageSettings.marginTop}pt`,
+                paddingRight: `${pageSettings.marginRight}pt`,
+                paddingBottom: `${pageSettings.marginBottom}pt`,
+                paddingLeft: `${pageSettings.marginLeft}pt`,
+                fontFamily: fontFamily === 'font-mono' ? 'monospace' : fontFamily === 'font-serif' ? 'serif' : 'sans-serif',
+                fontSize: activeTmpl ? `${activeTmpl.theme.baseFontSize}pt` : '10pt',
+                color: activeTmpl ? activeTmpl.theme.colors.text : '#1f2937',
+              }}
+              className={`bg-white border-t-8 rounded-lg shadow-md relative overflow-hidden text-left text-body-sm font-medium mx-auto transition-all duration-300 select-none
+                ${pageSettings.orientation === 'landscape' ? 'max-w-[1100px] min-h-[750px]' : 'max-w-[850px] min-h-[960px]'}`}
             >
               
-              {/* Simulated draft watermark */}
+              {/* Simulated draft watermark overlay */}
               {showWatermark && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-5 select-none rotate-45">
-                  <span className="text-[72px] font-bold tracking-widest text-on-surface">{watermarkText}</span>
+                <div 
+                  style={{
+                    opacity: activeTmpl ? activeTmpl.watermark.opacity : 0.05,
+                    transform: `translate(-50%, -50%) rotate(-${activeTmpl ? activeTmpl.watermark.angle : 45}deg)`,
+                    color: activeTmpl ? activeTmpl.theme.colors.muted : '#9ca3af',
+                  }}
+                  className="absolute left-1/2 top-1/2 font-bold text-[64px] pointer-events-none select-none tracking-wider whitespace-nowrap z-0 font-sans animate-fade-in"
+                >
+                  {watermarkText}
                 </div>
               )}
 
-              {/* Dynamic Blocks Loop */}
-              <div className="space-y-8">
+              {/* 1. ORGANIZATION BRANDING BLOCK (Virtual) */}
+              <div 
+                onClick={() => setSelectedBlockId('org-branding')}
+                className={`flex justify-between items-start gap-4 mb-6 z-10 border-b pb-4 cursor-pointer hover:ring-1 hover:ring-primary/45 rounded p-2 transition-all relative group/block
+                  ${selectedBlockId === 'org-branding' ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-outline-variant/40'}`}
+              >
+                {/* Floating badge controls */}
+                <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
+                  <span className="bg-primary text-on-primary text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[10px]">edit</span> Edit Org Branding
+                  </span>
+                </div>
+
+                <div>
+                  {/* Logo Display / Uploader */}
+                  {fieldVisibility.logoUrl ? (
+                    <div className="relative group/logo mb-3 max-w-[160px]">
+                      <img src={fieldVisibility.logoUrl} className="max-h-12 object-contain rounded" alt="Logo" />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFieldVisibility(prev => ({ ...prev, logoUrl: '' }));
+                        }}
+                        className="absolute -top-1.5 -right-1.5 bg-error text-on-error hover:bg-error-container rounded-full w-4 h-4 flex items-center justify-center shadow-xs no-print"
+                        title="Remove Logo"
+                      >
+                        <span className="material-symbols-outlined text-[10px]">close</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="border border-dashed border-outline-variant/60 hover:border-primary rounded p-2 flex flex-col items-center justify-center bg-surface-container-low/40 cursor-pointer relative mb-3 max-w-[160px] no-print">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setFieldVisibility(prev => ({ ...prev, logoUrl: reader.result as string }));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                      <span className="material-symbols-outlined text-primary text-[16px]">add_photo_alternate</span>
+                      <span className="text-[9px] font-bold text-on-surface-variant mt-0.5">Upload Logo</span>
+                    </div>
+                  )}
+
+                  {/* Select Corporate Entity directly inline */}
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[9px] text-on-surface-variant font-bold uppercase select-none">Billing Entity</span>
+                    <select
+                      value={selectedCompanyId || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedCompanyId(val);
+                        api.documents.update(id, { companyId: val || null }).catch(console.error);
+                      }}
+                      style={{ color: accentColor }}
+                      className="bg-transparent border-b border-dashed border-outline-variant/60 hover:border-primary font-bold text-headline-sm focus:outline-none py-0.5"
+                    >
+                      <option value="">No Corporate Link</option>
+                      {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  
+                  {/* Show company address preview inline */}
+                  {selectedCompanyId && (
+                    <div className="mt-1 text-on-surface-variant/80 text-[11px] leading-tight font-medium">
+                      {(() => {
+                        const comp = companies.find(c => c.id === selectedCompanyId);
+                        if (!comp) return null;
+                        return (
+                          <div className="space-y-0.5 mt-1 text-[10.5px]">
+                            {fieldVisibility.showOrgAddress && (
+                              <>
+                                <p>{comp.addressLine1}</p>
+                                {comp.addressLine2 && <p>{comp.addressLine2}</p>}
+                                <p>{comp.city}, {comp.postalCode}, {comp.country}</p>
+                              </>
+                            )}
+                            {fieldVisibility.showOrgTaxId && comp.taxId && (
+                              <p className="mt-0.5 font-semibold text-primary">Tax ID: {comp.taxId}</p>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-right text-[11.5px] leading-relaxed flex flex-col items-end">
+                  <div className="flex items-center gap-1">
+                    <strong className="text-on-surface">Invoice Title:</strong>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => {
+                        setTitle(e.target.value);
+                        triggerAutoSave(blocks, e.target.value);
+                      }}
+                      className="bg-transparent border-b border-dashed border-outline-variant/60 focus:border-primary focus:outline-none text-[11px] font-bold text-on-surface text-right w-44"
+                    />
+                  </div>
+                  <p><span className="text-on-surface-variant">Type:</span> <span className="font-bold">{doc?.type}</span></p>
+                  <p><span className="text-on-surface-variant">Status:</span> <span className="font-semibold text-primary">{status}</span></p>
+                </div>
+              </div>
+
+              {/* 2. CLIENT BILL TO & SHIP TO DETAILS BLOCK (Virtual) */}
+              <div 
+                onClick={() => setSelectedBlockId('billing-client')}
+                className={`flex gap-12 mb-6 border-b pb-4 z-10 cursor-pointer hover:ring-1 hover:ring-primary/45 rounded p-2 transition-all relative group/block
+                  ${selectedBlockId === 'billing-client' ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-outline-variant/40'}`}
+              >
+                {/* Floating badge controls */}
+                <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
+                  <span className="bg-primary text-on-primary text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[10px]">edit</span> Edit Client details
+                  </span>
+                </div>
+
+                <div className="flex-1">
+                  <span style={{ color: accentColor }} className="text-[10px] font-bold uppercase tracking-wider block mb-1">
+                    {activeTmpl ? activeTmpl.customer.billToHeading : 'Bill To'}
+                  </span>
+                  <select
+                    value={selectedCustomerId || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedCustomerId(val);
+                      api.documents.update(id, { customerId: val || null }).catch(console.error);
+                    }}
+                    className="bg-transparent border-b border-dashed border-outline-variant/60 hover:border-primary font-bold text-[12px] focus:outline-none w-full py-0.5 text-on-surface"
+                  >
+                    <option value="">Unlinked Client</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  
+                  {/* Customer billing address preview inline */}
+                  {selectedCustomerId && (
+                    <div className="mt-1 text-on-surface-variant/80 text-[11px] leading-tight space-y-0.5 mt-1 text-[10.5px]">
+                      {(() => {
+                        const cust = customers.find(c => c.id === selectedCustomerId);
+                        if (!cust) return null;
+                        return (
+                          <>
+                            {fieldVisibility.showCustAddress && (
+                              <>
+                                <p>{cust.addressLine1 || 'No billing address set'}</p>
+                                {cust.addressLine2 && <p>{cust.addressLine2}</p>}
+                                <p>{cust.city || ''} {cust.postalCode || ''} {cust.country || ''}</p>
+                              </>
+                            )}
+                            {fieldVisibility.showCustEmail && <p>{cust.email}</p>}
+                            {fieldVisibility.showCustPhone && cust.phone && <p>{cust.phone}</p>}
+                            {fieldVisibility.showCustTax && cust.customFields && (
+                              <p className="mt-0.5 font-semibold text-primary">
+                                {typeof cust.customFields === 'string' ? cust.customFields : JSON.stringify(cust.customFields)}
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1">
+                  {/* Optionally display ship to address */}
+                  {selectedCustomerId && (
+                    <>
+                      <span style={{ color: accentColor }} className="text-[10px] font-bold uppercase tracking-wider block mb-1">
+                        {activeTmpl ? activeTmpl.customer.shipToHeading : 'Ship To'}
+                      </span>
+                      <p className="font-bold text-[12px] text-on-surface">
+                        {(() => {
+                          const cust = customers.find(c => c.id === selectedCustomerId);
+                          return cust ? cust.name : '—';
+                        })()}
+                      </p>
+                      {fieldVisibility.showCustAddress && (
+                        <p className="text-on-surface-variant/80 text-[11px] mt-1">
+                          {(() => {
+                            const cust = customers.find(c => c.id === selectedCustomerId);
+                            return cust ? (cust.addressLine1 || 'Same as billing') : '—';
+                          })()}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. DYNAMIC BLOCKS LOOP (TABLE, TEXT, NOTES, COVER) */}
+              <div className="space-y-6">
                 {blocks.map((block, idx) => {
                   
                   // COVER BLOCK RENDERING
                   if (block.blockType === 'COVER') {
                     return (
-                      <div key={block.id} className="space-y-4 border-b border-outline-variant/40 pb-6 relative group">
-                        
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <input 
-                              type="text" 
-                              value={block.content.subtitle || ''}
-                              onChange={(e) => updateBlockContent(idx, 'subtitle', e.target.value)}
-                              className="text-headline-md font-bold text-on-surface bg-transparent border-b border-transparent hover:border-outline-variant focus:border-primary focus:outline-none w-full text-[18px]"
-                              placeholder="Document Subtitle/Subject"
-                            />
-                            <input 
-                              type="text" 
-                              value={block.content.date || ''}
-                              onChange={(e) => updateBlockContent(idx, 'date', e.target.value)}
-                              className="text-body-sm text-on-surface-variant bg-transparent border-b border-transparent hover:border-outline-variant focus:border-primary focus:outline-none w-48 mt-1 font-mono text-[11px]"
-                              placeholder="Date"
-                            />
-                          </div>
-
-                          {/* Stamp simulation */}
-                          {showStamp && (
-                            <div 
-                              style={{ borderColor: accentColor, color: accentColor }}
-                              className="border-4 border-dashed rounded px-2.5 py-1 font-bold text-[10px] uppercase select-none tracking-widest rotate-12 opacity-80"
-                            >
-                              Authorized
-                            </div>
-                          )}
+                      <div 
+                        key={block.id}
+                        onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
+                        className={`space-y-2 border-b pb-4 cursor-pointer hover:ring-1 hover:ring-primary/45 rounded p-2 transition-all relative group/block
+                          ${selectedBlockId === block.id ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-outline-variant/30'}`}
+                      >
+                        {/* Floating controls */}
+                        <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
+                            disabled={idx === 0}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
+                            title="Move Up"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
+                            disabled={idx === blocks.length - 1}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
+                            title="Move Down"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); duplicateBlock(idx); }}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary"
+                            title="Duplicate block"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-error-container/20 hover:text-error text-on-surface-variant"
+                            title="Delete"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">delete</span>
+                          </button>
                         </div>
+                        <input 
+                          type="text" 
+                          value={block.content?.subtitle || ''}
+                          onChange={(e) => updateBlockContent(idx, 'subtitle', e.target.value)}
+                          style={{ color: accentColor }}
+                          className="font-bold bg-transparent border-b border-transparent hover:border-outline-variant focus:border-primary focus:outline-none w-full text-[14px]"
+                          placeholder="Document Subtitle/Subject"
+                        />
                       </div>
                     );
                   }
@@ -605,12 +1175,51 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   // TEXT BLOCK RENDERING
                   if (block.blockType === 'TEXT') {
                     return (
-                      <div key={block.id} className="relative group">
+                      <div 
+                        key={block.id}
+                        onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
+                        className={`relative group/block border rounded p-2 cursor-pointer transition-all hover:ring-1 hover:ring-primary/45
+                          ${selectedBlockId === block.id ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-transparent'}`}
+                      >
+                        {/* Floating controls */}
+                        <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
+                            disabled={idx === 0}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
+                            disabled={idx === blocks.length - 1}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); duplicateBlock(idx); }}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary"
+                            title="Duplicate block"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-error-container/20 hover:text-error text-on-surface-variant"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">delete</span>
+                          </button>
+                        </div>
                         <textarea
-                          value={block.content.text || ''}
+                          value={block.content?.text || ''}
                           onChange={(e) => updateBlockContent(idx, 'text', e.target.value)}
-                          className="w-full bg-transparent border border-transparent hover:border-outline-variant focus:border-primary focus:outline-none rounded p-2 text-body-md text-on-surface resize-none leading-relaxed font-sans"
-                          rows={3}
+                          className="w-full bg-transparent border border-transparent hover:border-outline-variant/60 focus:border-primary focus:outline-none rounded p-1 text-[12px] text-on-surface resize-none leading-relaxed"
+                          rows={2}
                           placeholder="Insert description summary or contract clause..."
                         />
                       </div>
@@ -621,47 +1230,97 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   if (block.blockType === 'TABLE') {
                     const { subtotal, taxTotal, total } = calculateTotals(block.content);
                     return (
-                      <div key={block.id} className="space-y-4 relative group">
+                      <div 
+                        key={block.id}
+                        onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
+                        className={`space-y-4 relative group/block border rounded p-2 cursor-pointer transition-all hover:ring-1 hover:ring-primary/45
+                          ${selectedBlockId === block.id ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-transparent'}`}
+                      >
+                        {/* Floating controls */}
+                        <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
+                            disabled={idx === 0}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
+                            disabled={idx === blocks.length - 1}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); duplicateBlock(idx); }}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary"
+                            title="Duplicate block"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-error-container/20 hover:text-error text-on-surface-variant"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">delete</span>
+                          </button>
+                        </div>
+
                         <div className="overflow-x-auto">
                           <table className="w-full text-left border-collapse text-[11px] font-medium">
                             <thead>
                               <tr 
-                                style={{ backgroundColor: `${accentColor}10`, borderBottom: `2px solid ${accentColor}` }}
+                                style={{ 
+                                  backgroundColor: activeTmpl ? activeTmpl.theme.colors.tableHeaderBg : `${accentColor}10`,
+                                  color: activeTmpl ? activeTmpl.theme.colors.tableHeaderText : '#ffffff',
+                                  borderBottom: `2px solid ${accentColor}`
+                                }}
                                 className="text-on-surface-variant font-bold select-none text-[10px] uppercase tracking-wider"
                               >
-                                <th className="p-2 w-[18%]">SKU / Item</th>
+                                {fieldVisibility.showTableSku && <th className="p-2 w-[15%]">SKU / Item</th>}
                                 <th className="p-2 w-[35%]">Description</th>
-                                <th className="p-2 w-[10%] text-right">Qty</th>
-                                <th className="p-2 w-[12%] text-right">Rate</th>
-                                <th className="p-2 w-[10%] text-center">Tax</th>
-                                <th className="p-2 w-[10%] text-right">Total</th>
-                                <th className="p-2 w-[5%] text-right"></th>
+                                {fieldVisibility.showTableType && <th className="p-2 w-[25%]">Type</th>}
+                                <th className="p-2 w-[15%] text-right">Amount (₹)</th>
+                                {fieldVisibility.showTableTaxCode && <th className="p-2 w-[10%] text-center">Tax</th>}
+                                <th className="p-2 w-[5%] text-right no-print"></th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-outline-variant">
-                              {(block.content.items || []).map((item: any, itemIdx: number) => (
-                                <tr key={itemIdx} className="hover:bg-surface-container-low/40">
-                                  
-                                  {/* Item selection auto-populate */}
-                                  <td className="p-2">
-                                    <select
-                                      value={products.find(p => p.sku === item.sku)?.id || ''}
-                                      onChange={(e) => updateLineItemField(idx, itemIdx, 'productId', e.target.value)}
-                                      className="w-full bg-transparent focus:outline-none focus:ring-1 focus:ring-primary border border-outline-variant/60 rounded px-1 text-[11px] font-mono text-on-surface"
-                                    >
-                                      <option value="">Manual SKU</option>
-                                      {products.map(p => (
-                                        <option key={p.id} value={p.id}>{p.sku}</option>
-                                      ))}
-                                    </select>
-                                    <input 
-                                      type="text" 
-                                      value={item.sku} 
-                                      onChange={(e) => updateLineItemField(idx, itemIdx, 'sku', e.target.value)}
-                                      placeholder="SKU"
-                                      className="w-full bg-transparent focus:outline-none border-b border-transparent focus:border-primary text-[10px] font-mono text-on-surface-variant mt-1"
-                                    />
-                                  </td>
+                            <tbody className="divide-y divide-outline-variant/40">
+                              {(block.content?.items || []).map((item: any, itemIdx: number) => (
+                                <tr 
+                                  key={itemIdx} 
+                                  style={{
+                                    backgroundColor: activeTmpl && activeTmpl.table.zebra && itemIdx % 2 === 1 ? activeTmpl.theme.colors.zebraBg : 'transparent'
+                                  }}
+                                  className="hover:bg-surface-container-low/40"
+                                >
+                                  {/* Item SKU selection */}
+                                  {fieldVisibility.showTableSku && (
+                                    <td className="p-2">
+                                      <select
+                                        value={products.find(p => p.sku === item.sku)?.id || ''}
+                                        onChange={(e) => updateLineItemField(idx, itemIdx, 'productId', e.target.value)}
+                                        className="w-full bg-transparent focus:outline-none focus:ring-1 focus:ring-primary border border-outline-variant/60 rounded px-1 text-[11px] font-mono text-on-surface"
+                                      >
+                                        <option value="">Manual SKU</option>
+                                        {products.map(p => (
+                                          <option key={p.id} value={p.id}>{p.sku}</option>
+                                        ))}
+                                      </select>
+                                      <input 
+                                        type="text" 
+                                        value={item.sku} 
+                                        onChange={(e) => updateLineItemField(idx, itemIdx, 'sku', e.target.value)}
+                                        placeholder="SKU"
+                                        className="w-full bg-transparent focus:outline-none border-b border-transparent focus:border-primary text-[10px] font-mono text-on-surface-variant mt-1"
+                                      />
+                                    </td>
+                                  )}
 
                                   <td className="p-2 align-top">
                                     <textarea
@@ -673,106 +1332,118 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                                     />
                                   </td>
 
-                                  <td className="p-2 text-right align-top">
-                                    <input 
-                                      type="number" 
-                                      value={item.quantity}
-                                      onChange={(e) => updateLineItemField(idx, itemIdx, 'quantity', Number(e.target.value) || 0)}
-                                      className="w-12 bg-transparent text-right focus:outline-none border-b border-outline-variant/60 focus:border-primary font-mono text-[11px]"
-                                    />
-                                  </td>
+                                  {fieldVisibility.showTableType && (
+                                    <td className="p-2 align-top">
+                                      <input 
+                                        type="text" 
+                                        value={item.type || ''}
+                                        onChange={(e) => updateLineItemField(idx, itemIdx, 'type', e.target.value)}
+                                        placeholder="Billing Type"
+                                        className="w-full bg-transparent focus:outline-none border-b border-outline-variant/60 focus:border-primary text-[11px]"
+                                      />
+                                    </td>
+                                  )}
 
                                   <td className="p-2 text-right align-top">
                                     <input 
                                       type="number" 
                                       value={item.rate}
                                       onChange={(e) => updateLineItemField(idx, itemIdx, 'rate', Number(e.target.value) || 0)}
-                                      className="w-16 bg-transparent text-right focus:outline-none border-b border-outline-variant/60 focus:border-primary font-mono text-[11px]"
+                                      className="w-20 bg-transparent text-right focus:outline-none border-b border-outline-variant/60 focus:border-primary font-mono text-[11px]"
                                     />
                                   </td>
 
-                                  <td className="p-2 text-center align-top">
-                                    <select
-                                      value={item.taxCode}
-                                      onChange={(e) => updateLineItemField(idx, itemIdx, 'taxCode', e.target.value)}
-                                      className="bg-transparent focus:outline-none border border-outline-variant/60 rounded text-[10px] font-semibold text-on-surface"
-                                    >
-                                      {taxes.map(t => (
-                                        <option key={t.id} value={t.code}>{t.code}</option>
-                                      ))}
-                                    </select>
-                                  </td>
+                                  {fieldVisibility.showTableTaxCode && (
+                                    <td className="p-2 text-center align-top">
+                                      <select
+                                        value={item.taxCode || 'EXEMPT'}
+                                        onChange={(e) => updateLineItemField(idx, itemIdx, 'taxCode', e.target.value)}
+                                        className="bg-transparent focus:outline-none border border-outline-variant/60 rounded text-[10px] font-semibold text-on-surface w-full"
+                                      >
+                                        {taxes.map(t => (
+                                          <option key={t.id} value={t.code}>{t.name} ({Number(t.ratePercent)}%)</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                  )}
 
-                                  <td className="p-2 text-right align-top font-mono font-bold text-primary">
-                                    ${((item.quantity || 0) * (item.rate || 0)).toFixed(2)}
-                                  </td>
-
-                                  <td className="p-2 text-right align-top">
+                                  <td className="p-2 text-right align-top no-print flex items-center justify-end gap-1.5">
+                                    {item.sku && !products.some(p => p.sku === item.sku) && (
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleSaveProductToMaster(item.sku, item.description, item.rate, item.unit, item.taxCode)}
+                                        className="text-primary hover:text-primary-fixed-variant transition-all duration-150 hover:scale-110 active:scale-90"
+                                        title="Save item to Master Catalog"
+                                      >
+                                        <span className="material-symbols-outlined text-[15px]">save</span>
+                                      </button>
+                                    )}
                                     <button 
-                                      type="button" 
+                                      type="button"
                                       onClick={() => removeLineItem(idx, itemIdx)}
-                                      className="text-on-surface-variant hover:text-error transition-colors"
+                                      className="text-on-surface-variant hover:text-error"
+                                      title="Remove item"
                                     >
-                                      <span className="material-symbols-outlined text-[14px]">close</span>
+                                      <span className="material-symbols-outlined text-[15px]">close</span>
                                     </button>
                                   </td>
-
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         </div>
 
-                        <button 
-                          type="button" 
-                          onClick={() => addLineItem(idx)}
-                          className="text-[11px] text-primary font-bold flex items-center gap-0.5 hover:text-primary-fixed-variant"
-                        >
-                          <span className="material-symbols-outlined text-[14px]">add_circle</span> Add Row Item
-                        </button>
+                        {/* Add Row control */}
+                        <div className="flex justify-between items-start pt-2 no-print">
+                          <button
+                            type="button"
+                            onClick={() => addLineItem(idx)}
+                            className="bg-surface border border-outline-variant hover:bg-surface-container transition-colors text-[10px] font-bold px-2 py-1 rounded flex items-center gap-0.5 text-primary shadow-xs active:scale-95"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">add</span> Add Row Item
+                          </button>
+                        </div>
 
-                        {/* Calculation Summary blocks */}
-                        <div className="flex justify-end pt-4 border-t border-outline-variant/40 select-none">
-                          <div className="w-64 space-y-2.5 text-body-sm font-semibold text-on-surface-variant">
-                            
-                            <div className="flex justify-between font-mono">
+                        {/* Totals Calculation Card */}
+                        <div className="flex justify-end pt-3 border-t border-outline-variant/40">
+                          <div className="w-64 space-y-1.5 text-right text-[11px]">
+                            <div className="flex justify-between text-on-surface-variant">
                               <span>Subtotal:</span>
-                              <span className="text-on-surface">${subtotal.toFixed(2)}</span>
+                              <span className="font-bold font-mono">{formatCurrency(subtotal, '₹')}</span>
                             </div>
-                            
-                            <div className="flex justify-between font-mono">
+                            <div className="flex justify-between text-on-surface-variant">
                               <span>Tax Addition:</span>
-                              <span className="text-on-surface">${taxTotal.toFixed(2)}</span>
+                              <span className="font-bold font-mono">{formatCurrency(taxTotal, '₹')}</span>
                             </div>
-
-                            <div className="flex justify-between items-center gap-2">
-                              <span>Discount:</span>
-                              <input 
-                                type="number" 
-                                value={block.content.discount || 0}
-                                onChange={(e) => updateBlockContent(idx, 'discount', Number(e.target.value) || 0)}
-                                className="w-16 h-6 text-right bg-surface-container-low border border-outline-variant/60 rounded font-mono text-[11px] focus:outline-none"
-                              />
-                            </div>
-
-                            <div className="flex justify-between items-center gap-2">
-                              <span>Adjustment:</span>
-                              <input 
-                                type="number" 
-                                value={block.content.adjustment || 0}
-                                onChange={(e) => updateBlockContent(idx, 'adjustment', Number(e.target.value) || 0)}
-                                className="w-16 h-6 text-right bg-surface-container-low border border-outline-variant/60 rounded font-mono text-[11px] focus:outline-none"
-                              />
-                            </div>
-
-                            <div className="h-px bg-outline-variant/60 w-full"></div>
-
-                            <div className="flex justify-between font-mono font-bold text-headline-sm text-on-surface">
+                            {fieldVisibility.applyDiscount && (
+                              <div className="flex justify-between items-center text-on-surface-variant gap-2">
+                                <span>Discount (₹):</span>
+                                <input 
+                                  type="number" 
+                                  value={block.content?.discount || 0}
+                                  onChange={(e) => updateBlockContent(idx, 'discount', Number(e.target.value) || 0)}
+                                  className="w-16 bg-transparent text-right focus:outline-none border-b border-outline-variant/60 focus:border-primary font-mono py-0.5"
+                                />
+                              </div>
+                            )}
+                            {fieldVisibility.applyAdjustment && (
+                              <div className="flex justify-between items-center text-on-surface-variant gap-2">
+                                <span>Adjustment (₹):</span>
+                                <input 
+                                  type="number" 
+                                  value={block.content?.adjustment || 0}
+                                  onChange={(e) => updateBlockContent(idx, 'adjustment', Number(e.target.value) || 0)}
+                                  className="w-16 bg-transparent text-right focus:outline-none border-b border-outline-variant/60 focus:border-primary font-mono py-0.5"
+                                />
+                              </div>
+                            )}
+                            <div style={{ color: accentColor }} className="flex justify-between font-bold text-[12px] border-t border-outline-variant/60 pt-1.5 mt-1.5">
                               <span>Grand Total:</span>
-                              <span style={{ color: accentColor }}>${total.toFixed(2)}</span>
+                              <span className="font-mono">{formatCurrency(total, '₹')}</span>
                             </div>
                           </div>
                         </div>
+
                       </div>
                     );
                   }
@@ -780,14 +1451,151 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   // NOTES BLOCK RENDERING
                   if (block.blockType === 'NOTES') {
                     return (
-                      <div key={block.id} className="relative group">
+                      <div 
+                        key={block.id}
+                        onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
+                        className={`relative group/block border rounded p-2 cursor-pointer transition-all hover:ring-1 hover:ring-primary/45
+                          ${selectedBlockId === block.id ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-transparent'}`}
+                      >
+                        {/* Floating controls */}
+                        <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
+                            disabled={idx === 0}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
+                            disabled={idx === blocks.length - 1}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); duplicateBlock(idx); }}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary"
+                            title="Duplicate block"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-error-container/20 hover:text-error text-on-surface-variant"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">delete</span>
+                          </button>
+                        </div>
+                        <span style={{ color: accentColor }} className="text-[10px] font-bold uppercase tracking-wider block mb-1">
+                          {activeTmpl ? activeTmpl.notes.heading : 'Notes & Footnotes'}
+                        </span>
                         <textarea
-                          value={block.content.notes || ''}
+                          value={block.content?.notes || ''}
                           onChange={(e) => updateBlockContent(idx, 'notes', e.target.value)}
-                          className="w-full bg-surface-container-low/50 border border-outline-variant/60 rounded p-3 text-[11px] text-on-surface-variant font-medium font-mono leading-relaxed"
+                          className="w-full bg-transparent border border-transparent hover:border-outline-variant/60 focus:border-primary focus:outline-none rounded p-1 text-[10px] text-on-surface-variant/80 resize-none leading-relaxed"
                           rows={2}
-                          placeholder="Insert payment methods details or disclaimer footnote..."
+                          placeholder="Add footnote declarations..."
                         />
+                      </div>
+                    );
+                  }
+
+                  // CUSTOM FIELDS BLOCK RENDERING
+                  if (block.blockType === 'CUSTOM_FIELDS') {
+                    const fields = block.content?.fields || [];
+                    return (
+                      <div 
+                        key={block.id}
+                        onClick={(e) => { e.stopPropagation(); setSelectedBlockId(block.id); }}
+                        className={`relative group/block border rounded p-2 cursor-pointer transition-all hover:ring-1 hover:ring-primary/45 space-y-2
+                          ${selectedBlockId === block.id ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-transparent'}`}
+                      >
+                        {/* Floating controls */}
+                        <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'UP'); }}
+                            disabled={idx === 0}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">arrow_upward</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); moveBlock(idx, 'DOWN'); }}
+                            disabled={idx === blocks.length - 1}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary disabled:opacity-30"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">arrow_downward</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); duplicateBlock(idx); }}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-surface-container text-on-surface-variant hover:text-primary"
+                            title="Duplicate block"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">content_copy</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); removeBlock(idx); }}
+                            className="w-5 h-5 rounded bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center hover:bg-error-container/20 hover:text-error text-on-surface-variant"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">delete</span>
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-[11px] leading-relaxed">
+                          {fields.map((f: any, fIdx: number) => (
+                            <div key={fIdx} className="flex items-center gap-1.5 group/row hover:bg-surface-container-lowest/50 p-0.5 rounded">
+                              <input 
+                                type="text" 
+                                value={f.key}
+                                onChange={(e) => {
+                                  const updatedFields = fields.map((field: any, i: number) => i === fIdx ? { ...field, key: e.target.value } : field);
+                                  updateBlockContent(idx, 'fields', updatedFields);
+                                }}
+                                placeholder="Label Name"
+                                className="w-1/3 bg-transparent text-[11px] font-bold text-on-surface focus:outline-none border-b border-transparent focus:border-primary"
+                              />
+                              <span className="text-on-surface-variant">:</span>
+                              <input 
+                                type="text" 
+                                value={f.value}
+                                onChange={(e) => {
+                                  const updatedFields = fields.map((field: any, i: number) => i === fIdx ? { ...field, value: e.target.value } : field);
+                                  updateBlockContent(idx, 'fields', updatedFields);
+                                }}
+                                placeholder="Field Value"
+                                className="flex-1 bg-transparent text-[11px] text-on-surface-variant/80 focus:outline-none border-b border-transparent focus:border-primary"
+                              />
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  const updatedFields = fields.filter((_: any, i: number) => i !== fIdx);
+                                  updateBlockContent(idx, 'fields', updatedFields);
+                                }}
+                                className="text-on-surface-variant hover:text-error opacity-0 group-hover/row:opacity-100 transition-opacity no-print"
+                              >
+                                <span className="material-symbols-outlined text-[12px]">close</span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updatedFields = [...fields, { key: 'Custom Label', value: '' }];
+                            updateBlockContent(idx, 'fields', updatedFields);
+                          }}
+                          className="text-[10px] text-primary font-bold flex items-center gap-0.5 hover:text-primary-fixed-variant no-print"
+                        >
+                          <span className="material-symbols-outlined text-[12px]">add_circle</span> Add Custom Field
+                        </button>
                       </div>
                     );
                   }
@@ -795,9 +1603,110 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
                   return null;
                 })}
               </div>
-              
-            </div>
 
+              {/* 4. FOOTER DETAILS BLOCK (Virtual) */}
+              <div 
+                onClick={() => setSelectedBlockId('footer')}
+                className={`border-t pt-4 mt-8 cursor-pointer hover:ring-1 hover:ring-primary/45 rounded p-2 transition-all relative group/block
+                  ${selectedBlockId === 'footer' ? 'ring-2 ring-primary bg-primary/5 border-transparent' : 'border-outline-variant/40'}`}
+              >
+                {/* Floating badge controls */}
+                <div className="absolute right-2 -top-4 opacity-0 group-hover/block:opacity-100 flex gap-1 z-20 transition-opacity select-none no-print">
+                  <span className="bg-primary text-on-primary text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[10px]">edit</span> Edit Payment & Footer
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-8 text-[10.5px] leading-tight">
+                  {fieldVisibility.showPaymentInstructions && (
+                    <div>
+                      <h6 style={{ color: accentColor }} className="font-bold text-[9px] uppercase tracking-wider mb-1">
+                        {activeTmpl ? activeTmpl.payment.heading : 'Payment Instructions'}
+                      </h6>
+                      <p className="text-on-surface-variant/80">{activeTmpl ? activeTmpl.payment.instructions : 'Please settle outstanding amount within 30 days.'}</p>
+                    </div>
+                  )}
+                  
+                  {fieldVisibility.showBankDetails && (
+                    <div>
+                      <h6 style={{ color: accentColor }} className="font-bold text-[9px] uppercase tracking-wider mb-1">
+                        {activeTmpl ? activeTmpl.bank.heading : 'Bank Transfer Details'}
+                      </h6>
+                      {(() => {
+                        const comp = companies.find(c => c.id === selectedCompanyId);
+                        if (!comp) return <p className="text-on-surface-variant/60 italic">No corporate bank linked</p>;
+                        return (
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="space-y-0.5">
+                              <p><strong className="font-semibold text-on-surface">Bank:</strong> {comp.bankName || '—'}</p>
+                              <p><strong className="font-semibold text-on-surface">Account Name:</strong> {comp.name}</p>
+                              <p><strong className="font-semibold text-on-surface">IBAN:</strong> {comp.bankIban || '—'}</p>
+                              <p><strong className="font-semibold text-on-surface">BIC/SWIFT:</strong> {comp.bankBic || '—'}</p>
+                            </div>
+
+                            {/* QR Code Display / Uploader */}
+                            {fieldVisibility.qrUrl ? (
+                              <div className="relative group/qr w-20 h-20 shrink-0">
+                                <img src={fieldVisibility.qrUrl} className="w-20 h-20 object-contain border border-outline-variant/60 rounded p-1" alt="QR" />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFieldVisibility(prev => ({ ...prev, qrUrl: '' }));
+                                  }}
+                                  className="absolute -top-1.5 -right-1.5 bg-error text-on-error hover:bg-error-container rounded-full w-4 h-4 flex items-center justify-center shadow-xs no-print"
+                                  title="Remove QR Code"
+                                >
+                                  <span className="material-symbols-outlined text-[10px]">close</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="border border-dashed border-outline-variant/60 hover:border-primary rounded p-2.5 flex flex-col items-center justify-center bg-surface-container-low/40 cursor-pointer relative w-24 shrink-0 no-print">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const reader = new FileReader();
+                                      reader.onloadend = () => {
+                                        setFieldVisibility(prev => ({ ...prev, qrUrl: reader.result as string }));
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }}
+                                  className="absolute inset-0 opacity-0 cursor-pointer"
+                                />
+                                <span className="material-symbols-outlined text-primary text-[16px]">qr_code_2</span>
+                                <span className="text-[9px] font-bold text-on-surface-variant mt-0.5">Upload QR</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Signatory line */}
+                {fieldVisibility.showSignature && activeTmpl && activeTmpl.signature.show && (
+                  <div className="mt-8 pt-4 self-end text-right text-[10px] w-full flex justify-end">
+                    <div className="text-center w-48 border-t border-outline-variant pt-1 mt-6 pr-4">
+                      <p className="font-bold text-on-surface">{activeTmpl.signature.label}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bottom line */}
+                {fieldVisibility.showFooter && activeTmpl && activeTmpl.footer.show && (
+                  <div className="mt-8 pt-2 border-t border-outline-variant/30 text-[9px] text-on-surface-variant/70 text-center flex justify-between w-full">
+                    <span>{activeTmpl.footer.text}</span>
+                    {activeTmpl.footer.showPageNumbers && <span>Page 1 of 1</span>}
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
         </main>
 
@@ -833,77 +1742,616 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
             {activeRightTab === 'properties' && (
               <div className="space-y-4">
                 
-                {/* Status selector */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Document Status</label>
-                  <select
-                    value={status}
-                    onChange={(e) => handleUpdateStatus(e.target.value)}
-                    className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm font-semibold text-on-surface"
-                  >
-                    <option value="DRAFT">DRAFT</option>
-                    <option value="SENT">SENT</option>
-                    <option value="REVIEW">REVIEW</option>
-                    <option value="APPROVED">APPROVED</option>
-                    <option value="REJECTED">REJECTED</option>
-                    <option value="PAID">PAID</option>
-                    <option value="CANCELLED">CANCELLED</option>
-                  </select>
-                </div>
+                {/* 1. If ORGANIZATION BRANDING virtual block selected */}
+                {selectedBlockId === 'org-branding' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-1.5 border-b border-outline-variant/60 pb-2">
+                      <span className="material-symbols-outlined text-primary text-[18px]">branding_watermark</span>
+                      <h4 className="font-bold text-[12px] text-on-surface">Org Branding Settings</h4>
+                    </div>
 
-                {/* Company association */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Billing Corporate Entity</label>
-                  <select
-                    value={selectedCompanyId}
-                    onChange={(e) => {
-                      setSelectedCompanyId(e.target.value);
-                      // Trigger autosave with new reference parameters
-                      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-                      autoSaveTimer.current = setTimeout(() => {
-                        api.documents.create({ title, type: doc?.type || 'INVOICE', companyId: e.target.value, customerId: selectedCustomerId });
-                      }, 1000);
-                    }}
-                    className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-[11px] text-on-surface"
-                  >
-                    <option value="">Unlinked</option>
-                    {companies.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
+                    {/* Field Toggles */}
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Field Visibility</span>
+                      <div className="space-y-2 border border-outline-variant/40 rounded-lg p-2.5 bg-surface-container-low/40">
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={fieldVisibility.showOrgTaxId}
+                            onChange={(e) => setFieldVisibility(prev => ({ ...prev, showOrgTaxId: e.target.checked }))}
+                            className="rounded text-primary focus:ring-primary h-4 w-4"
+                          />
+                          Show Company Tax ID
+                        </label>
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={fieldVisibility.showOrgAddress}
+                            onChange={(e) => setFieldVisibility(prev => ({ ...prev, showOrgAddress: e.target.checked }))}
+                            className="rounded text-primary focus:ring-primary h-4 w-4"
+                          />
+                          Show Organization Address
+                        </label>
+                      </div>
+                    </div>
 
-                {/* Customer association */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Customer / Client Roster</label>
-                  <select
-                    value={selectedCustomerId}
-                    onChange={(e) => {
-                      setSelectedCustomerId(e.target.value);
-                      // Trigger autosave reference parameters
-                      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-                      autoSaveTimer.current = setTimeout(() => {
-                        api.documents.create({ title, type: doc?.type || 'INVOICE', companyId: selectedCompanyId, customerId: e.target.value });
-                      }, 1000);
-                    }}
-                    className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-[11px] text-on-surface"
-                  >
-                    <option value="">Unlinked</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
+                    {/* Color Swatch overrides */}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] text-on-surface-variant font-bold uppercase">Accent Color</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1.5">
+                          {['#3b82f6', '#0d9488', '#16a34a', '#ca8a04', '#4b5563', '#6366f1'].map(color => (
+                            <button
+                              key={color}
+                              type="button"
+                              onClick={() => setAccentColor(color)}
+                              style={{ backgroundColor: color }}
+                              className={`w-5 h-5 rounded-full border border-outline-variant/60 transition-transform
+                                ${accentColor.toLowerCase() === color.toLowerCase() ? 'ring-2 ring-primary ring-offset-1 scale-110' : ''}`}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-1 border-l pl-2 border-outline-variant/60 ml-1">
+                          <input
+                            type="color"
+                            value={accentColor.startsWith('#') && accentColor.length === 7 ? accentColor : '#3b82f6'}
+                            onChange={(e) => setAccentColor(e.target.value)}
+                            className="w-6 h-6 border-0 p-0 rounded-full cursor-pointer overflow-hidden bg-transparent"
+                            title="Custom color picker"
+                          />
+                          <input
+                            type="text"
+                            value={accentColor}
+                            onChange={(e) => setAccentColor(e.target.value)}
+                            placeholder="#hex"
+                            className="w-14 h-6 text-[10px] font-mono border border-outline-variant/60 rounded bg-transparent px-1 text-center"
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-                <div className="h-px bg-outline-variant/60 w-full pt-2"></div>
+                    {/* Typography choice */}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Document Font</label>
+                      <select
+                        value={fontFamily}
+                        onChange={(e) => setFontFamily(e.target.value)}
+                        className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm font-semibold text-on-surface"
+                      >
+                        <option value="font-sans">Inter (Modern Sans)</option>
+                        <option value="font-serif">Playfair (Elegant Serif)</option>
+                        <option value="font-mono">Fira Code (High-Density Mono)</option>
+                      </select>
+                    </div>
 
-                <button
-                  onClick={handleDuplicate}
-                  className="w-full bg-surface border border-outline-variant hover:bg-surface-container-low transition-colors font-bold text-[11px] py-1.5 rounded flex items-center justify-center gap-1 text-on-surface active:scale-95"
-                >
-                  <span className="material-symbols-outlined text-[14px]">content_copy</span>
-                  Duplicate Document
-                </button>
+                    {/* Stamp / Logo settings */}
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Branding Elements</span>
+                      <div className="space-y-2 border border-outline-variant/40 rounded-lg p-2.5 bg-surface-container-low/40">
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={showStamp}
+                            onChange={(e) => setShowStamp(e.target.checked)}
+                            className="rounded text-primary focus:ring-primary h-4 w-4"
+                          />
+                          Approved Stamp Overlay
+                        </label>
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={showWatermark}
+                            onChange={(e) => setShowWatermark(e.target.checked)}
+                            className="rounded text-primary focus:ring-primary h-4 w-4"
+                          />
+                          Watermark Overlay
+                        </label>
+                        {showWatermark && (
+                          <div className="flex flex-col gap-1.5 pl-6 pt-1">
+                            <label className="text-[9px] text-on-surface-variant font-bold">Watermark Label</label>
+                            <input
+                              type="text"
+                              value={watermarkText}
+                              onChange={(e) => setWatermarkText(e.target.value)}
+                              className="px-2 py-1 h-7 border border-outline-variant rounded bg-surface text-[11px]"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-outline-variant/60 w-full pt-1"></div>
+                    
+                    {/* Reusable Template Trigger */}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          setSaving(true);
+                          const layoutDef = {
+                            meta: {
+                              name: `${title} Layout Preset`,
+                              category: 'INVOICE' as const,
+                              description: `Custom layout preset compiled from ${title}`,
+                            },
+                            theme: {
+                              fonts: { heading: fontFamily, body: fontFamily, mono: 'font-mono' },
+                              baseFontSize: 10,
+                              colors: {
+                                primary: accentColor,
+                                text: '#1f2937',
+                                muted: '#6b7280',
+                                border: '#e5e7eb',
+                                tableHeaderBg: `${accentColor}10`,
+                                tableHeaderText: accentColor,
+                                zebraBg: '#f9fafb',
+                              }
+                            },
+                            page: {
+                              size: pageSettings.size.toUpperCase() as 'A4' | 'LETTER',
+                              orientation: pageSettings.orientation as 'portrait' | 'landscape',
+                              margins: {
+                                top: pageSettings.marginTop,
+                                right: pageSettings.marginRight,
+                                bottom: pageSettings.marginBottom,
+                                left: pageSettings.marginLeft
+                              }
+                            },
+                            table: {
+                              columns: [],
+                              zebra: true,
+                              showBorders: true,
+                              compact: false
+                            },
+                            watermark: {
+                              enabled: showWatermark,
+                              text: watermarkText,
+                              opacity: 0.05,
+                              angle: 45
+                            },
+                            customer: {
+                              showBillTo: true,
+                              billToHeading: 'Bill To',
+                              showShipTo: true,
+                              shipToHeading: 'Ship To',
+                              fields: []
+                            },
+                            payment: {
+                              show: true,
+                              heading: 'Payment Instructions',
+                              instructions: 'Standard Net 30 days terms apply.'
+                            },
+                            bank: {
+                              show: true,
+                              heading: 'Bank Transfer details',
+                              source: 'company' as const,
+                              fields: []
+                            },
+                            signature: {
+                              show: showStamp,
+                              label: 'Authorized Signatory',
+                              source: 'branding' as const,
+                              showStamp: showStamp
+                            },
+                            footer: {
+                              show: true,
+                              text: 'Thank you for your business.',
+                              showPageNumbers: true
+                            }
+                          };
+                          
+                          const res = await api.templateEngine.createDefinition(layoutDef);
+                          const updatedList = await api.templateEngine.listDefinitions();
+                          setDesignerTemplates(updatedList);
+                          setSelectedTemplateId(res.meta.id);
+                          triggerToast('Custom styles saved as reusable template!');
+                        } catch (e: any) {
+                          triggerToast(e.message || 'Failed to save template layout.', true);
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      className="w-full bg-primary-container text-primary hover:bg-primary-container/85 border border-primary/20 transition-all font-bold text-[10.5px] py-1.5 rounded flex items-center justify-center gap-1 active:scale-95 shadow-xs"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">style</span>
+                      Save as Reusable Template
+                    </button>
+                  </div>
+                )}
+
+                {/* 2. If CLIENT details virtual block selected */}
+                {selectedBlockId === 'billing-client' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-1.5 border-b border-outline-variant/60 pb-2">
+                      <span className="material-symbols-outlined text-primary text-[18px]">person</span>
+                      <h4 className="font-bold text-[12px] text-on-surface">Client Info Settings</h4>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-on-surface-variant font-bold uppercase">Customer / Client Link</label>
+                      <select
+                        value={selectedCustomerId || ''}
+                        onChange={(e) => setSelectedCustomerId(e.target.value || '')}
+                        className="w-full h-8 px-2 border border-outline-variant rounded bg-surface text-[11px] text-on-surface focus:outline-none"
+                      >
+                        <option value="">Unlinked Client</option>
+                        {customers.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2 mt-2">
+                      <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Field Visibility</span>
+                      <div className="space-y-2 border border-outline-variant/40 rounded-lg p-2.5 bg-surface-container-low/40">
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={fieldVisibility.showCustTax}
+                            onChange={(e) => setFieldVisibility(prev => ({ ...prev, showCustTax: e.target.checked }))}
+                            className="rounded text-primary focus:ring-primary h-4 w-4"
+                          />
+                          Show Client Tax ID / GSTIN
+                        </label>
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={fieldVisibility.showCustAddress}
+                            onChange={(e) => setFieldVisibility(prev => ({ ...prev, showCustAddress: e.target.checked }))}
+                            className="rounded text-primary focus:ring-primary h-4 w-4"
+                          />
+                          Show Address Lines
+                        </label>
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={fieldVisibility.showCustEmail}
+                            onChange={(e) => setFieldVisibility(prev => ({ ...prev, showCustEmail: e.target.checked }))}
+                            className="rounded text-primary focus:ring-primary h-4 w-4"
+                          />
+                          Show Contact Email
+                        </label>
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={fieldVisibility.showCustPhone}
+                            onChange={(e) => setFieldVisibility(prev => ({ ...prev, showCustPhone: e.target.checked }))}
+                            className="rounded text-primary focus:ring-primary h-4 w-4"
+                          />
+                          Show Contact Phone
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. If standard block is selected */}
+                {(() => {
+                  const blockIdx = blocks.findIndex(b => b.id === selectedBlockId);
+                  if (blockIdx === -1) return null;
+                  const block = blocks[blockIdx];
+
+                  if (block.blockType === 'TABLE') {
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-1.5 border-b border-outline-variant/60 pb-2">
+                          <span className="material-symbols-outlined text-primary text-[18px]">table_chart</span>
+                          <h4 className="font-bold text-[12px] text-on-surface">Pricing Table Config</h4>
+                        </div>
+                        
+                         {/* Column visibility overrides */}
+                         <div className="space-y-2">
+                           <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Columns Visibility</span>
+                           <div className="space-y-2 border border-outline-variant/40 rounded-lg p-2.5 bg-surface-container-low/40">
+                             <label className="flex items-center gap-2 font-semibold">
+                               <input
+                                 type="checkbox"
+                                 checked={fieldVisibility.showTableSku}
+                                 onChange={(e) => setFieldVisibility(prev => ({ ...prev, showTableSku: e.target.checked }))}
+                                 className="rounded text-primary focus:ring-primary h-4 w-4"
+                               />
+                               Show SKU/Item ID
+                             </label>
+                             <label className="flex items-center gap-2 font-semibold">
+                               <input
+                                 type="checkbox"
+                                 checked={fieldVisibility.showTableType}
+                                 onChange={(e) => setFieldVisibility(prev => ({ ...prev, showTableType: e.target.checked }))}
+                                 className="rounded text-primary focus:ring-primary h-4 w-4"
+                               />
+                               Show Type Column
+                             </label>
+                             <label className="flex items-center gap-2 font-semibold">
+                               <input
+                                 type="checkbox"
+                                 checked={fieldVisibility.showTableTaxCode}
+                                 onChange={(e) => setFieldVisibility(prev => ({ ...prev, showTableTaxCode: e.target.checked }))}
+                                 className="rounded text-primary focus:ring-primary h-4 w-4"
+                               />
+                               Show Tax Code / Rate
+                             </label>
+                           </div>
+                         </div>
+
+                         {/* Pricing adjustments */}
+                         <div className="space-y-3">
+                           <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Pricing Adjustments</span>
+                           <div className="space-y-2.5 border border-outline-variant/40 rounded-lg p-2.5 bg-surface-container-low/40">
+                             <label className="flex items-center gap-2 font-semibold">
+                               <input
+                                 type="checkbox"
+                                 checked={fieldVisibility.applyDiscount}
+                                 onChange={(e) => setFieldVisibility(prev => ({ ...prev, applyDiscount: e.target.checked }))}
+                                 className="rounded text-primary focus:ring-primary h-4 w-4"
+                               />
+                               Apply Discount Row
+                             </label>
+                             <label className="flex items-center gap-2 font-semibold">
+                               <input
+                                 type="checkbox"
+                                 checked={fieldVisibility.applyAdjustment}
+                                 onChange={(e) => setFieldVisibility(prev => ({ ...prev, applyAdjustment: e.target.checked }))}
+                                 className="rounded text-primary focus:ring-primary h-4 w-4"
+                               />
+                               Apply Adjustment Row
+                             </label>
+                           </div>
+
+                           <div className="grid grid-cols-2 gap-2">
+                             {fieldVisibility.applyDiscount && (
+                               <div className="flex flex-col gap-0.5 animate-fade-in">
+                                 <label className="text-[9px] text-on-surface-variant font-bold uppercase">Discount (₹)</label>
+                                 <input
+                                   type="number"
+                                   value={block.content?.discount || 0}
+                                   onChange={(e) => updateBlockContent(blockIdx, 'discount', Number(e.target.value) || 0)}
+                                   className="h-8 px-2 border border-outline-variant rounded bg-surface font-semibold text-[11px] font-mono"
+                                 />
+                               </div>
+                             )}
+                             {fieldVisibility.applyAdjustment && (
+                               <div className="flex flex-col gap-0.5 animate-fade-in">
+                                 <label className="text-[9px] text-on-surface-variant font-bold uppercase">Adjustment (₹)</label>
+                                 <input
+                                   type="number"
+                                   value={block.content?.adjustment || 0}
+                                   onChange={(e) => updateBlockContent(blockIdx, 'adjustment', Number(e.target.value) || 0)}
+                                   className="h-8 px-2 border border-outline-variant rounded bg-surface font-semibold text-[11px] font-mono"
+                                 />
+                               </div>
+                             )}
+                           </div>
+                         </div>
+                      </div>
+                    );
+                  }
+
+                  // TEXT / NOTES specific options
+                  if (block.blockType === 'TEXT' || block.blockType === 'NOTES') {
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-1.5 border-b border-outline-variant/60 pb-2">
+                          <span className="material-symbols-outlined text-primary text-[18px]">notes</span>
+                          <h4 className="font-bold text-[12px] text-on-surface">{block.blockType === 'TEXT' ? 'Text block properties' : 'Notes block properties'}</h4>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-on-surface-variant font-bold uppercase">Edit Text content</label>
+                          <textarea
+                            value={block.blockType === 'TEXT' ? (block.content?.text || '') : (block.content?.notes || '')}
+                            onChange={(e) => updateBlockContent(blockIdx, block.blockType === 'TEXT' ? 'text' : 'notes', e.target.value)}
+                            rows={6}
+                            className="p-2 border border-outline-variant rounded bg-surface text-[11px] font-medium resize-none leading-relaxed"
+                          />
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return null;
+                })()}
+
+                {/* 4. If FOOTER details block selected */}
+                {selectedBlockId === 'footer' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-1.5 border-b border-outline-variant/60 pb-2">
+                      <span className="material-symbols-outlined text-primary text-[18px]">description</span>
+                      <h4 className="font-bold text-[12px] text-on-surface">Payment Stub & Footer</h4>
+                    </div>
+
+                    {/* Checkbox visibility toggles */}
+                    <div className="space-y-2 border border-outline-variant/40 rounded-lg p-2.5 bg-surface-container-low/40">
+                      <label className="flex items-center gap-2 font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={fieldVisibility.showPaymentInstructions}
+                          onChange={(e) => setFieldVisibility(prev => ({ ...prev, showPaymentInstructions: e.target.checked }))}
+                          className="rounded text-primary focus:ring-primary h-4 w-4"
+                        />
+                        Show Payment Instructions
+                      </label>
+                      <label className="flex items-center gap-2 font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={fieldVisibility.showBankDetails}
+                          onChange={(e) => setFieldVisibility(prev => ({ ...prev, showBankDetails: e.target.checked }))}
+                          className="rounded text-primary focus:ring-primary h-4 w-4"
+                        />
+                        Show Bank Transfer Details
+                      </label>
+                      <label className="flex items-center gap-2 font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={fieldVisibility.showSignature}
+                          onChange={(e) => setFieldVisibility(prev => ({ ...prev, showSignature: e.target.checked }))}
+                          className="rounded text-primary focus:ring-primary h-4 w-4"
+                        />
+                        Show Signatory Line
+                      </label>
+                      <label className="flex items-center gap-2 font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={fieldVisibility.showFooter}
+                          onChange={(e) => setFieldVisibility(prev => ({ ...prev, showFooter: e.target.checked }))}
+                          className="rounded text-primary focus:ring-primary h-4 w-4"
+                        />
+                        Show Footer Text Line
+                      </label>
+                    </div>
+
+                    <div className="h-px bg-outline-variant/60 w-full pt-1"></div>
+
+                    {fieldVisibility.showPaymentInstructions && (
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] text-on-surface-variant font-bold uppercase">Payment Instructions</label>
+                        <textarea
+                          value={activeTmpl ? activeTmpl.payment.instructions : 'Settle outstanding invoices within 30 days.'}
+                          onChange={(e) => {
+                            if (activeTmpl) {
+                              api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                payment: { ...activeTmpl.payment, instructions: e.target.value }
+                              }).then(async () => {
+                                const updated = await api.templateEngine.listDefinitions();
+                                setDesignerTemplates(updated);
+                              });
+                            }
+                          }}
+                          rows={3}
+                          className="p-2 border border-outline-variant rounded bg-surface text-[11px] font-medium resize-none leading-relaxed"
+                        />
+                      </div>
+                    )}
+
+                    {fieldVisibility.showSignature && (
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] text-on-surface-variant font-bold uppercase">Signature Label</label>
+                        <input
+                          type="text"
+                          value={activeTmpl ? activeTmpl.signature.label : 'Authorized Signatory'}
+                          onChange={(e) => {
+                            if (activeTmpl) {
+                              api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                signature: { ...activeTmpl.signature, label: e.target.value }
+                              }).then(async () => {
+                                const updated = await api.templateEngine.listDefinitions();
+                                setDesignerTemplates(updated);
+                              });
+                            }
+                          }}
+                          className="h-8 px-2 border border-outline-variant rounded bg-surface text-[11px] font-medium"
+                        />
+                      </div>
+                    )}
+
+                    {fieldVisibility.showFooter && (
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] text-on-surface-variant font-bold uppercase">Footer text line</label>
+                        <textarea
+                          value={activeTmpl ? activeTmpl.footer.text : 'Thank you for choosing us.'}
+                          onChange={(e) => {
+                            if (activeTmpl) {
+                              api.templateEngine.updateDefinition(activeTmpl.meta.id, {
+                                footer: { ...activeTmpl.footer, text: e.target.value }
+                              }).then(async () => {
+                                const updated = await api.templateEngine.listDefinitions();
+                                setDesignerTemplates(updated);
+                              });
+                            }
+                          }}
+                          rows={2}
+                          className="p-2 border border-outline-variant rounded bg-surface text-[11px] font-medium resize-none"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 5. Default General properties when no canvas block is active */}
+                {!selectedBlockId && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-1.5 border-b border-outline-variant/60 pb-2">
+                      <span className="material-symbols-outlined text-primary text-[18px]">settings</span>
+                      <h4 className="font-bold text-[12px] text-on-surface">Document Details</h4>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-on-surface-variant font-bold uppercase">Document Title</label>
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={(e) => {
+                          setTitle(e.target.value);
+                          triggerAutoSave(blocks, e.target.value);
+                        }}
+                        className="h-8 px-2 border border-outline-variant rounded bg-surface text-[11.5px] font-bold"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-on-surface-variant font-bold uppercase">Document Status</label>
+                      <select
+                        value={status}
+                        onChange={(e) => handleUpdateStatus(e.target.value)}
+                        className="w-full h-8 px-2 border border-outline-variant rounded bg-surface text-body-sm font-semibold text-on-surface focus:outline-none"
+                      >
+                        <option value="DRAFT">DRAFT</option>
+                        <option value="SENT">SENT</option>
+                        <option value="REVIEW">REVIEW</option>
+                        <option value="APPROVED">APPROVED</option>
+                        <option value="REJECTED">REJECTED</option>
+                        <option value="PAID">PAID</option>
+                        <option value="CANCELLED">CANCELLED</option>
+                      </select>
+                    </div>
+
+                    <div className="h-px bg-outline-variant/60 w-full pt-1"></div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-on-surface-variant font-bold uppercase">Active Blueprint Theme</label>
+                      <select
+                        value={selectedTemplateId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedTemplateId(val);
+                          const selectedTmpl = designerTemplates.find(t => t.meta.id === val);
+                          if (selectedTmpl) {
+                            const newAccent = selectedTmpl.theme.colors.primary;
+                            const newFont = selectedTmpl.theme.fonts.body.includes('Mono') ? 'font-mono' : selectedTmpl.theme.fonts.body.includes('Serif') ? 'font-serif' : 'font-sans';
+                            const newWatermark = selectedTmpl.watermark.enabled;
+                            const newWatermarkText = selectedTmpl.watermark.text;
+                            setAccentColor(newAccent);
+                            setFontFamily(newFont);
+                            setShowWatermark(newWatermark);
+                            setWatermarkText(newWatermarkText);
+                            api.documents.update(id, {
+                              templateId: val,
+                              accentColor: newAccent,
+                              fontFamily: newFont,
+                              showWatermark: newWatermark,
+                              watermarkText: newWatermarkText,
+                            }).catch(console.error);
+                          } else {
+                            api.documents.update(id, { templateId: val }).catch(console.error);
+                          }
+                        }}
+                        className="w-full h-8 px-2 border border-outline-variant rounded bg-surface text-[11px] font-semibold text-on-surface focus:outline-none"
+                      >
+                        {designerTemplates.map(t => (
+                          <option key={t.meta.id} value={t.meta.id}>{t.meta.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="h-px bg-outline-variant/60 w-full pt-1"></div>
+
+                    <button
+                      onClick={handleDuplicate}
+                      className="w-full bg-surface border border-outline-variant hover:bg-surface-container-low transition-colors font-bold text-[11px] py-1.5 rounded flex items-center justify-center gap-1 text-on-surface active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                      Duplicate Document
+                    </button>
+                  </div>
+                )}
 
               </div>
             )}
@@ -912,70 +2360,42 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
             {activeRightTab === 'styles' && (
               <div className="space-y-4">
                 
-                {/* Color Swatches */}
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] text-on-surface-variant font-bold uppercase">Accent Theme Color</span>
-                  <div className="flex gap-2">
-                    {['#3b82f6', '#0d9488', '#16a34a', '#ca8a04', '#4b5563'].map(color => (
-                      <button
-                        key={color}
-                        onClick={() => setAccentColor(color)}
-                        style={{ backgroundColor: color }}
-                        className={`w-6 h-6 rounded-full border-2 transition-transform
-                          ${accentColor === color ? 'border-on-surface scale-110' : 'border-transparent'}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Typography choices */}
+                {/* Apply from Templates list */}
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Primary Font</label>
+                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Apply Layout Theme</label>
                   <select
-                    value={fontFamily}
-                    onChange={(e) => setFontFamily(e.target.value)}
-                    className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-body-sm font-semibold text-on-surface"
+                    value={selectedTemplateId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedTemplateId(val);
+                      const selectedTmpl = designerTemplates.find(t => t.meta.id === val);
+                      if (selectedTmpl) {
+                        const newAccent = selectedTmpl.theme.colors.primary;
+                        const newFont = selectedTmpl.theme.fonts.body.includes('Mono') ? 'font-mono' : selectedTmpl.theme.fonts.body.includes('Serif') ? 'font-serif' : 'font-sans';
+                        const newWatermark = selectedTmpl.watermark.enabled;
+                        const newWatermarkText = selectedTmpl.watermark.text;
+                        setAccentColor(newAccent);
+                        setFontFamily(newFont);
+                        setShowWatermark(newWatermark);
+                        setWatermarkText(newWatermarkText);
+                        api.documents.update(id, {
+                          templateId: val,
+                          accentColor: newAccent,
+                          fontFamily: newFont,
+                          showWatermark: newWatermark,
+                          watermarkText: newWatermarkText,
+                        }).catch(console.error);
+                        triggerToast(`Applied styles from "${selectedTmpl.meta.name}".`);
+                      }
+                    }}
+                    className="w-full h-8 px-2 border border-outline-variant rounded bg-surface text-body-sm font-semibold text-on-surface focus:outline-none"
                   >
-                    <option value="font-sans">Inter (Modern Sans)</option>
-                    <option value="font-serif">Playfair (Elegant Serif)</option>
-                    <option value="font-mono">Fira Code (High-Density Mono)</option>
+                    <option value="">Select layout theme...</option>
+                    {designerTemplates.map(t => (
+                      <option key={t.meta.id} value={t.meta.id}>{t.meta.name}</option>
+                    ))}
                   </select>
                 </div>
-
-                <div className="h-px bg-outline-variant/60 w-full pt-1"></div>
-
-                {/* Logo stamp toggler checkboxes */}
-                <div className="flex items-center gap-2 mt-2">
-                  <input
-                    type="checkbox"
-                    checked={showStamp}
-                    onChange={(e) => setShowStamp(e.target.checked)}
-                    className="rounded text-primary focus:ring-primary h-4 w-4"
-                  />
-                  <label className="font-semibold text-on-surface">Render Approved Stamp</label>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={showWatermark}
-                    onChange={(e) => setShowWatermark(e.target.checked)}
-                    className="rounded text-primary focus:ring-primary h-4 w-4"
-                  />
-                  <label className="font-semibold text-on-surface">Enable Sheet Watermark</label>
-                </div>
-
-                {showWatermark && (
-                  <div className="flex flex-col gap-1 pl-6">
-                    <label className="text-[9px] text-on-surface-variant font-bold">Watermark Text</label>
-                    <input
-                      type="text"
-                      value={watermarkText}
-                      onChange={(e) => setWatermarkText(e.target.value)}
-                      className="px-2 py-1 h-7 border border-outline-variant rounded bg-surface-container-low text-[11px]"
-                    />
-                  </div>
-                )}
 
               </div>
             )}
@@ -1038,15 +2458,83 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
 
             {/* EXPORT TAB */}
             {activeRightTab === 'export' && (
-              <div className="space-y-4">
+              <div className="space-y-4 select-none">
                 
+                <div className="space-y-3">
+                  <span className="text-[10px] text-on-surface-variant font-bold uppercase block">Template Design Layout</span>
+                  
+                  {designerTemplates.length === 0 ? (
+                    <div className="text-[10px] text-on-surface-variant italic">
+                      No custom layouts defined in Template Designer.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[9px] text-on-surface-variant font-bold uppercase">Select Blueprint</label>
+                      <select
+                        value={selectedTemplateId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedTemplateId(val);
+                          const selectedTmpl = designerTemplates.find(t => t.meta.id === val);
+                          if (selectedTmpl) {
+                            const newAccent = selectedTmpl.theme.colors.primary;
+                            const newFont = selectedTmpl.theme.fonts.body.includes('Mono') ? 'font-mono' : selectedTmpl.theme.fonts.body.includes('Serif') ? 'font-serif' : 'font-sans';
+                            const newWatermark = selectedTmpl.watermark.enabled;
+                            const newWatermarkText = selectedTmpl.watermark.text;
+                            setAccentColor(newAccent);
+                            setFontFamily(newFont);
+                            setShowWatermark(newWatermark);
+                            setWatermarkText(newWatermarkText);
+                            api.documents.update(id, {
+                              templateId: val,
+                              accentColor: newAccent,
+                              fontFamily: newFont,
+                              showWatermark: newWatermark,
+                              watermarkText: newWatermarkText,
+                            }).catch(console.error);
+                          } else {
+                            api.documents.update(id, { templateId: val }).catch(console.error);
+                          }
+                        }}
+                        className="w-full h-8 px-2 border border-outline-variant rounded bg-surface-container-low text-[11px] font-semibold text-on-surface focus:outline-none"
+                      >
+                        {designerTemplates.map(t => (
+                          <option key={t.meta.id} value={t.meta.id}>{t.meta.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadDesignerFile('pdf')}
+                      className="bg-primary text-on-primary hover:bg-primary-fixed-variant transition-colors font-bold text-[10px] py-2 rounded flex items-center justify-center gap-1 shadow-sm active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">picture_as_pdf</span>
+                      Export PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadDesignerFile('docx')}
+                      className="bg-surface hover:bg-surface-container border border-outline-variant transition-colors font-bold text-[10px] py-2 text-on-surface rounded flex items-center justify-center gap-1 shadow-sm active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">description</span>
+                      Export Word
+                    </button>
+                  </div>
+                </div>
+
+                <div className="h-px bg-outline-variant/60 w-full pt-1"></div>
+
                 {/* Print Layout */}
                 <button
+                  type="button"
                   onClick={handleDownloadPdf}
-                  className="w-full bg-primary text-on-primary hover:bg-primary-fixed-variant transition-colors font-bold text-[11px] py-2 rounded flex items-center justify-center gap-1 shadow-sm active:scale-95"
+                  className="w-full bg-surface border border-outline-variant hover:bg-surface-container transition-colors text-on-surface-variant/80 font-bold text-[10px] py-1.5 rounded flex items-center justify-center gap-1 active:scale-95"
                 >
-                  <span className="material-symbols-outlined text-[16px]">print</span>
-                  Print / Export simulated PDF
+                  <span className="material-symbols-outlined text-[14px]">print</span>
+                  Print Web Screen (Default Browser)
                 </button>
 
                 <div className="h-px bg-outline-variant/60 w-full pt-1"></div>
@@ -1126,4 +2614,19 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
       </div>
     </MainLayout>
   );
+}
+
+function formatCurrency(amount: number, symbol: string): string {
+  const sym = symbol === '₹' ? 'Rs. ' : symbol;
+  return `${sym}${Number(amount).toFixed(2)}`;
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch (e) {
+    return dateStr;
+  }
 }

@@ -39,6 +39,8 @@ export class RenewalsService {
         paymentStatus: data.paymentStatus || 'UNPAID',
         assignedEmployee: data.assignedEmployee || null,
         notes: data.notes || null,
+        emailId: data.emailId || null,
+        password: data.password || null,
         documentId: data.documentId || null,
       },
       include: { document: true }
@@ -61,6 +63,8 @@ export class RenewalsService {
         paymentStatus: data.paymentStatus,
         assignedEmployee: data.assignedEmployee,
         notes: data.notes,
+        emailId: data.emailId,
+        password: data.password,
         documentId: data.documentId || undefined,
       },
       include: { document: true }
@@ -97,6 +101,8 @@ export class RenewalsService {
             paymentStatus: u.data.paymentStatus,
             assignedEmployee: u.data.assignedEmployee,
             notes: u.data.notes,
+            emailId: u.data.emailId,
+            password: u.data.password,
           },
         })
       )

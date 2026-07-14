@@ -11,6 +11,7 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<any>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  verifyMfa: (mfaToken: string, code: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,6 +61,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const verifyMfa = async (mfaToken: string, code: string) => {
+    setLoading(true);
+    try {
+      const res = await api.auth.verifyMfa(mfaToken, code);
+      if (res.status === 'SUCCESS' && res.user) {
+        setUser(res.user);
+        router.push('/');
+      }
+      return res;
+    } catch (err) {
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = () => {
     api.auth.logout();
     setUser(null);
@@ -67,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, verifyMfa }}>
       {children}
     </AuthContext.Provider>
   );

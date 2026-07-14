@@ -327,6 +327,12 @@ model Document {
   customer         Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
   authorId         String
   author           User              @relation("DocumentAuthor", fields: [authorId], references: [id])
+  accentColor      String?
+  fontFamily       String?
+  showWatermark    Boolean           @default(false)
+  watermarkText    String?
+  showStamp        Boolean           @default(false)
+  templateId       String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   blocks           DocumentBlock[]
@@ -392,6 +398,8 @@ model Renewal {
   paymentStatus    String        @default("UNPAID") // UNPAID, PAID, OVERDUE
   assignedEmployee String?
   notes            String?       @db.Text
+  emailId          String?
+  password         String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   reminders        ReminderLog[]

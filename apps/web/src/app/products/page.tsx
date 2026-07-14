@@ -43,7 +43,7 @@ export default function ProductsPage() {
       setUnits(unitList);
       setTaxes(taxList);
     } catch (err: any) {
-      setError(err.message || 'Failed to load master data products catalog.');
+      setError(err.message || 'Failed to load services directory.');
     } finally {
       setLoading(false);
     }
@@ -99,7 +99,7 @@ export default function ProductsPage() {
           taxId: taxId || undefined,
         });
         setProducts(products.map(p => p.id === updated.id ? updated : p));
-        triggerToast('Product catalog updated.');
+        triggerToast('Service catalog updated.');
       } else {
         // Create new product
         const created = await api.products.create({
@@ -111,7 +111,7 @@ export default function ProductsPage() {
           taxId: taxId || undefined,
         });
         setProducts([...products, created]);
-        triggerToast('New product created.');
+        triggerToast('New service offering created.');
       }
       setDrawerOpen(false);
     } catch (err: any) {
@@ -120,11 +120,11 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
+    if (!confirm('Are you sure you want to delete this service offering?')) return;
     try {
       await api.products.delete(id);
       setProducts(products.filter(p => p.id !== id));
-      triggerToast('Product removed from catalog.');
+      triggerToast('Service offering removed from catalog.');
     } catch (err: any) {
       triggerToast(err.message || 'Error occurred during delete action.');
     }
@@ -170,15 +170,15 @@ export default function ProductsPage() {
         {/* Master Data Products Header */}
         <header className="h-14 border-b border-outline-variant bg-surface px-6 flex justify-between items-center shrink-0">
           <div>
-            <h1 className="font-headline-md text-headline-md text-on-surface font-bold">Products & Services Library</h1>
-            <p className="font-body-sm text-[11px] text-on-surface-variant">Autoritative inventory ledger for invoicing and drafting.</p>
+            <h1 className="font-headline-md text-headline-md text-on-surface font-bold">Services & Offerings Directory</h1>
+            <p className="font-body-sm text-[11px] text-on-surface-variant">Ledger of software engineering services, consulting rates, and licensing details.</p>
           </div>
           <button 
             onClick={handleOpenCreate}
             className="h-8 px-4 rounded bg-primary text-on-primary hover:bg-primary-fixed-variant transition-colors font-label-md text-label-md flex items-center gap-1 font-semibold select-none shadow-sm active:scale-95 transition-transform"
           >
             <span className="material-symbols-outlined text-[16px]">add</span>
-            Add Product
+            Add Service
           </button>
         </header>
 
@@ -207,15 +207,15 @@ export default function ProductsPage() {
             <div className="flex-1 overflow-auto custom-scrollbar">
               {loading ? (
                 <div className="h-48 flex items-center justify-center text-body-md text-on-surface-variant animate-pulse">
-                  Querying products ledger...
+                  Querying services directory...
                 </div>
               ) : error ? (
                 <div className="p-6 text-center text-error font-semibold text-body-md">{error}</div>
               ) : filteredProducts.length === 0 ? (
                 <div className="h-48 flex flex-col items-center justify-center text-on-surface-variant">
                   <span className="material-symbols-outlined text-[48px] text-outline mb-2">inventory_2</span>
-                  <span className="text-body-md font-medium">No Products Registered</span>
-                  <span className="text-[11px] mt-1">Register a service line item to start billing customers.</span>
+                  <span className="text-body-md font-bold text-on-surface">No Services Registered</span>
+                  <span className="text-[11px] mt-1 text-on-surface-variant">Register a software service offering to start billing customers.</span>
                 </div>
               ) : (
                 <table className="w-full text-left border-collapse table-fixed">
@@ -303,7 +303,7 @@ export default function ProductsPage() {
           <aside className="fixed right-0 top-0 h-screen w-[360px] bg-surface border-l border-outline-variant z-50 flex flex-col shadow-lg animate-in slide-in-from-right duration-200 select-none">
             <div className="h-14 border-b border-outline-variant bg-surface-bright px-4 flex items-center justify-between shrink-0">
               <h2 className="font-headline-sm text-headline-sm text-on-surface font-bold">
-                {editingProduct ? 'Edit Product SKU' : 'Add New Product'}
+                {editingProduct ? 'Edit Service Offer' : 'Add New Service'}
               </h2>
               <button 
                 onClick={() => setDrawerOpen(false)}
@@ -315,7 +315,7 @@ export default function ProductsPage() {
             
             <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-4 space-y-4">
               <div className="space-y-1">
-                <label className="block font-label-sm text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Product SKU (Unique)</label>
+                <label className="block font-label-sm text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Service SKU (Unique)</label>
                 <input 
                   type="text" 
                   value={sku}
@@ -394,7 +394,7 @@ export default function ProductsPage() {
                 type="submit"
                 className="w-full h-9 rounded bg-primary text-on-primary hover:bg-primary-fixed-variant transition-colors font-semibold text-body-sm flex items-center justify-center shadow-sm active:scale-95 transition-transform"
               >
-                Save Product
+                Save Service Offer
               </button>
             </form>
           </aside>

@@ -17,4 +17,15 @@ export class AuthController {
     const ua = (req.headers['user-agent'] as string) || '';
     return this.authService.login(body.email, body.pass, ip, ua);
   }
+
+  @Post('verify-mfa')
+  @HttpCode(HttpStatus.OK)
+  async verifyMfa(
+    @Body() body: { mfaToken: string; code: string },
+    @Req() req: Request,
+  ): Promise<AuthResponseDto> {
+    const ip = req.ip || '';
+    const ua = (req.headers['user-agent'] as string) || '';
+    return this.authService.verifyMfa(body.mfaToken, body.code, ip, ua);
+  }
 }

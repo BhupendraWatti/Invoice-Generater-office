@@ -82,6 +82,25 @@ export class DocumentsService {
         companyId: data.companyId || null,
         customerId: data.customerId || null,
         authorId,
+        templateId: 'base-classic',
+      },
+    });
+  }
+
+  async update(id: string, data: { title?: string; companyId?: string | null; customerId?: string | null; accentColor?: string | null; fontFamily?: string | null; showWatermark?: boolean; watermarkText?: string | null; showStamp?: boolean; templateId?: string | null }) {
+    await this.findOne(id);
+    return this.prisma.document.update({
+      where: { id },
+      data: {
+        title: data.title !== undefined ? data.title : undefined,
+        companyId: data.companyId !== undefined ? data.companyId : undefined,
+        customerId: data.customerId !== undefined ? data.customerId : undefined,
+        accentColor: data.accentColor !== undefined ? data.accentColor : undefined,
+        fontFamily: data.fontFamily !== undefined ? data.fontFamily : undefined,
+        showWatermark: data.showWatermark !== undefined ? data.showWatermark : undefined,
+        watermarkText: data.watermarkText !== undefined ? data.watermarkText : undefined,
+        showStamp: data.showStamp !== undefined ? data.showStamp : undefined,
+        templateId: data.templateId !== undefined ? data.templateId : undefined,
       },
     });
   }
@@ -155,6 +174,11 @@ export class DocumentsService {
           companyId: original.companyId,
           customerId: original.customerId,
           authorId,
+          accentColor: original.accentColor,
+          fontFamily: original.fontFamily,
+          showWatermark: original.showWatermark,
+          watermarkText: original.watermarkText,
+          showStamp: original.showStamp,
         }
       });
 
@@ -259,5 +283,12 @@ export class DocumentsService {
       approvedSevenDaysCount,
       storageUsedPercent,
     };
+  }
+
+  async delete(id: string) {
+    await this.findOne(id);
+    return this.prisma.document.delete({
+      where: { id },
+    });
   }
 }

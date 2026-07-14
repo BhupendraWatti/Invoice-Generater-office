@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { DocumentsService } from './documents.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DocumentStatus, DocumentType } from '@prisma/client';
@@ -33,6 +33,24 @@ export class DocumentsController {
     @Body() body: { title: string; type: DocumentType; companyId?: string; customerId?: string },
   ) {
     return this.documentsService.create(req.user.id, body);
+  }
+
+  @Put(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() body: { 
+      title?: string; 
+      companyId?: string | null; 
+      customerId?: string | null;
+      accentColor?: string | null;
+      fontFamily?: string | null;
+      showWatermark?: boolean;
+      watermarkText?: string | null;
+      showStamp?: boolean;
+      templateId?: string | null;
+    },
+  ) {
+    return this.documentsService.update(id, body);
   }
 
   @Put(':id/blocks')
@@ -91,5 +109,10 @@ export class DocumentsController {
       recipient: body.recipient,
       sentAt: new Date().toISOString()
     };
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string) {
+    return this.documentsService.delete(id);
   }
 }

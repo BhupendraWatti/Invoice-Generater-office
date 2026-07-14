@@ -19,6 +19,7 @@ import { CustomizationModule } from './modules/customization/customization.modul
 import { AuditModule } from './modules/audit/audit.module';
 import { HealthModule } from './modules/health/health.module';
 import { RolesGuard } from './modules/auth/roles.guard';
+import { TemplateEngineModule } from './modules/template-engine/template-engine.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { RolesGuard } from './modules/auth/roles.guard';
     CustomizationModule,
     AuditModule,
     HealthModule,
+    TemplateEngineModule,
   ],
   providers: [
     {

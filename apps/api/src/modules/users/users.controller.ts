@@ -12,7 +12,7 @@ export class UsersController {
 
   @Get('me')
   async getMe(@Req() req: any) {
-    const { passwordHash, mfaSecret, ...user } = req.user;
+    const { passwordHash, ...user } = req.user;
     return user;
   }
 

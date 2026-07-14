@@ -34,6 +34,10 @@ import {
   CustomDocumentTypeDto,
   WorkspacePreferenceSettingsDto,
   CompanyBrandingDto,
+  TemplateDefinitionDto,
+  TemplateDefinitionInput,
+  InvoiceData,
+  RenderResponseDto,
 } from '@docflow/shared-types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -75,6 +79,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      eraseCookie('token');
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+    }
     const errorText = await response.text();
     let errorMessage = 'An error occurred';
     try {
@@ -95,6 +105,16 @@ export const api = {
       const res = await request<AuthResponseDto>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, pass }),
+      });
+      if (res.status === 'SUCCESS' && res.token) {
+        setCookie('token', res.token);
+      }
+      return res;
+    },
+    verifyMfa: async (mfaToken: string, code: string): Promise<AuthResponseDto> => {
+      const res = await request<AuthResponseDto>('/auth/verify-mfa', {
+        method: 'POST',
+        body: JSON.stringify({ mfaToken, code }),
       });
       if (res.status === 'SUCCESS' && res.token) {
         setCookie('token', res.token);
@@ -184,6 +204,12 @@ export const api = {
         body: JSON.stringify(data),
       });
     },
+    update: async (id: string, data: { title?: string; companyId?: string | null; customerId?: string | null; accentColor?: string | null; fontFamily?: string | null; showWatermark?: boolean; watermarkText?: string | null; showStamp?: boolean; templateId?: string | null }): Promise<DocumentDto> => {
+      return request<DocumentDto>(`/documents/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
     updateBlocks: async (id: string, blocks: Array<{ sortOrder: number; blockType: string; content: string }>): Promise<DocumentDto> => {
       return request<DocumentDto>(`/documents/${id}/blocks`, {
         method: 'PUT',
@@ -225,6 +251,11 @@ export const api = {
       return request<{ success: boolean; messageId: string; recipient: string; sentAt: string }>(`/documents/${id}/email`, {
         method: 'POST',
         body: JSON.stringify({ recipient, subject, message }),
+      });
+    },
+    delete: async (id: string): Promise<DocumentDto> => {
+      return request<DocumentDto>(`/documents/${id}`, {
+        method: 'DELETE',
       });
     },
   },
@@ -591,6 +622,54 @@ export const api = {
     },
     getExportUrl: (): string => {
       return 'http://localhost:3001/api/audit/export';
+    },
+  },
+  activities: {
+    list: async (limit = 10): Promise<any[]> => {
+      return request<any[]>(`/activities?limit=${limit}`);
+    },
+    create: async (data: { actionType: string; documentId?: string; details: string }): Promise<any> => {
+      return request<any>('/activities', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+  },
+  templateEngine: {
+    listDefinitions: async (): Promise<TemplateDefinitionDto[]> => {
+      return request<TemplateDefinitionDto[]>('/template-engine/definitions');
+    },
+    getDefinition: async (id: string): Promise<TemplateDefinitionDto> => {
+      return request<TemplateDefinitionDto>(`/template-engine/definitions/${id}`);
+    },
+    createDefinition: async (data: TemplateDefinitionInput): Promise<TemplateDefinitionDto> => {
+      return request<TemplateDefinitionDto>('/template-engine/definitions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    updateDefinition: async (id: string, data: any): Promise<TemplateDefinitionDto> => {
+      return request<TemplateDefinitionDto>(`/template-engine/definitions/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    deleteDefinition: async (id: string): Promise<{ success: boolean }> => {
+      return request<{ success: boolean }>(`/template-engine/definitions/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    render: async (documentId: string, templateId: string, format: 'pdf' | 'docx'): Promise<RenderResponseDto> => {
+      return request<RenderResponseDto>(`/template-engine/render/${documentId}`, {
+        method: 'POST',
+        body: JSON.stringify({ templateId, format }),
+      });
+    },
+    preview: async (template: any, documentId?: string): Promise<{ template: TemplateDefinitionDto; invoiceData: InvoiceData }> => {
+      return request<{ template: TemplateDefinitionDto; invoiceData: InvoiceData }>('/template-engine/preview', {
+        method: 'POST',
+        body: JSON.stringify({ template, documentId }),
+      });
     },
   },
   health: {

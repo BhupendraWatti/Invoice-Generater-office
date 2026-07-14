@@ -6,7 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 
 export default function SidebarRail() {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const isLinkActive = (path: string) => {
     if (path === '/') {
@@ -19,9 +19,10 @@ export default function SidebarRail() {
     { title: 'Home', path: '/', icon: 'home' },
     { title: 'Companies', path: '/companies', icon: 'corporate_fare' },
     { title: 'Customers', path: '/customers', icon: 'groups' },
-    { title: 'Products', path: '/products', icon: 'inventory_2' },
+    { title: 'Services', path: '/products', icon: 'inventory_2' },
     { title: 'Renewals', path: '/renewals', icon: 'event_repeat' },
     { title: 'Templates', path: '/templates', icon: 'grid_view' },
+    { title: 'Designer', path: '/template-designer', icon: 'design_services' },
   ];
 
   const mockNavItems = [
@@ -66,16 +67,41 @@ export default function SidebarRail() {
 
           <div className="w-8 h-[1px] bg-outline-variant/30 my-2"></div>
 
-          {mockNavItems.map((item) => (
-            <div
-              key={item.title}
-              title={`${item.title} (Coming Soon)`}
-              className="flex flex-col items-center justify-center w-12 h-12 rounded-lg text-on-surface-variant/40 cursor-not-allowed group"
-            >
-              <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
-              <span className="font-label-sm text-[9px] mt-0.5 font-medium leading-none">{item.title}</span>
-            </div>
-          ))}
+          {mockNavItems.map((item) => {
+            const active = isLinkActive(item.path);
+            const isAdmin = user?.role === 'ADMIN';
+            if (isAdmin) {
+              return (
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  title={item.title}
+                  className={`relative flex flex-col items-center justify-center w-12 h-12 rounded-lg transition-all cursor-pointer active:scale-95 group
+                    ${
+                      active
+                        ? 'bg-primary/5 text-primary font-bold border border-primary/10'
+                        : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+                    }`}
+                >
+                  <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: active ? "'FILL' 1" : undefined }}>
+                    {item.icon}
+                  </span>
+                  <span className="font-label-sm text-[9px] mt-0.5 font-medium leading-none">{item.title}</span>
+                </Link>
+              );
+            } else {
+              return (
+                <div
+                  key={item.title}
+                  title={`${item.title} (Coming Soon)`}
+                  className="flex flex-col items-center justify-center w-12 h-12 rounded-lg text-on-surface-variant/40 cursor-not-allowed group"
+                >
+                  <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
+                  <span className="font-label-sm text-[9px] mt-0.5 font-medium leading-none">{item.title}</span>
+                </div>
+              );
+            }
+          })}
         </div>
       </div>
 

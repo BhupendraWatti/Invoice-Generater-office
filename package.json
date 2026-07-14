@@ -7,7 +7,7 @@
   "scripts": {
     "dev:api": "pnpm --filter @docflow/api dev",
     "dev:web": "pnpm --filter @docflow/web dev",
-    "dev": "pnpm dev:api & pnpm dev:web",
+    "dev": "pnpm --filter @docflow/api --filter @docflow/web --parallel dev",
     "build": "pnpm -r build",
     "db:generate": "pnpm --filter @docflow/db generate",
     "db:migrate": "pnpm --filter @docflow/db migrate:dev",

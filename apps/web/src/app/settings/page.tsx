@@ -15,7 +15,7 @@ import {
   CustomDocumentTypeDto,
 } from '@docflow/shared-types';
 
-type SettingsTab = 'general' | 'taxes' | 'payment-terms' | 'currencies' | 'units' | 'numbering' | 'customization' | 'users' | 'audit' | 'health';
+type SettingsTab = 'general' | 'products' | 'taxes' | 'payment-terms' | 'currencies' | 'units' | 'numbering' | 'customization' | 'users' | 'audit' | 'health';
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
@@ -48,11 +48,21 @@ export default function SettingsPage() {
 
   // Currencies states
   const [currencies, setCurrencies] = useState<CurrencyDto[]>([]);
-  const [newCurrCode, setNewCurrCode] = useState('');
-  const [newCurrName, setNewCurrName] = useState('');
-  const [newCurrSymbol, setNewCurrSymbol] = useState('$');
+  const [newCurrCode, setNewCurrCode] = useState('INR');
+  const [newCurrName, setNewCurrName] = useState('Indian Rupee');
+  const [newCurrSymbol, setNewCurrSymbol] = useState('₹');
   const [newCurrRate, setNewCurrRate] = useState(1.0);
   const [newCurrDefault, setNewCurrDefault] = useState(false);
+
+  // Product Master states
+  const [products, setProducts] = useState<any[]>([]);
+  const [newProdSku, setNewProdSku] = useState('');
+  const [newProdName, setNewProdName] = useState('');
+  const [newProdDesc, setNewProdDesc] = useState('');
+  const [newProdRate, setNewProdRate] = useState(0);
+  const [newProdUnitId, setNewProdUnitId] = useState('');
+  const [newProdTaxId, setNewProdTaxId] = useState('');
+  const [editingProdId, setEditingProdId] = useState<string | null>(null);
 
   // Units UOM states
   const [units, setUnits] = useState<UnitDto[]>([]);
@@ -111,6 +121,15 @@ export default function SettingsPage() {
           const sys = await api.settings.getSystem();
           setArchivePeriod(sys.archivePeriodMonths);
           setFileLimit(sys.maxFileSizeMb);
+        } else if (activeTab === 'products') {
+          const [prodList, unitsList, taxList] = await Promise.all([
+            api.products.list(),
+            api.units.list(),
+            api.taxes.list()
+          ]);
+          setProducts(prodList);
+          setUnits(unitsList);
+          setTaxes(taxList);
         } else if (activeTab === 'taxes') {
           const taxList = await api.taxes.list();
           setTaxes(taxList);
@@ -300,9 +319,9 @@ export default function SettingsPage() {
         isDefault: newCurrDefault,
       });
       setCurrencies([...currencies, created]);
-      setNewCurrCode('');
-      setNewCurrName('');
-      setNewCurrSymbol('$');
+      setNewCurrCode('INR');
+      setNewCurrName('Indian Rupee');
+      setNewCurrSymbol('₹');
       setNewCurrRate(1.0);
       setNewCurrDefault(false);
       showToast('Currency currency mapping created.');
@@ -318,6 +337,67 @@ export default function SettingsPage() {
       showToast('Currency mapping deleted.');
     } catch (err: any) {
       showToast(err.message || 'Failed to delete currency.', true);
+    }
+  };
+
+  // Product Master CRUD
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProdSku || !newProdName) return;
+    try {
+      if (editingProdId) {
+        const updated = await api.products.update(editingProdId, {
+          sku: newProdSku,
+          name: newProdName,
+          description: newProdDesc,
+          rate: Number(newProdRate) || 0,
+          unitId: newProdUnitId || undefined,
+          taxId: newProdTaxId || undefined,
+        });
+        setProducts(products.map(p => p.id === editingProdId ? updated : p));
+        setEditingProdId(null);
+        showToast('Product master entry updated.');
+      } else {
+        const created = await api.products.create({
+          sku: newProdSku,
+          name: newProdName,
+          description: newProdDesc,
+          rate: Number(newProdRate) || 0,
+          unitId: newProdUnitId || undefined,
+          taxId: newProdTaxId || undefined,
+        });
+        setProducts([...products, created]);
+        showToast('Product master entry registered.');
+      }
+      setNewProdSku('');
+      setNewProdName('');
+      setNewProdDesc('');
+      setNewProdRate(0);
+      setNewProdUnitId(units[0]?.id || '');
+      setNewProdTaxId(taxes[0]?.id || '');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save product.', true);
+    }
+  };
+
+  const handleEditProduct = (p: any) => {
+    setEditingProdId(p.id);
+    setNewProdSku(p.sku);
+    setNewProdName(p.name);
+    setNewProdDesc(p.description || '');
+    setNewProdRate(p.rate);
+    setNewProdUnitId(p.unitId || '');
+    setNewProdTaxId(p.taxId || '');
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm('Are you sure you want to remove this product/service from the master?')) return;
+    try {
+      await api.products.delete(id);
+      setProducts(products.filter(p => p.id !== id));
+      showToast('Product master entry removed.');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete product.', true);
     }
   };
 
@@ -457,15 +537,16 @@ export default function SettingsPage() {
 
   const tabs: Array<{ id: SettingsTab; title: string; icon: string }> = [
     { id: 'general', title: 'General & Profile', icon: 'manage_accounts' },
+    { id: 'products', title: 'Product/Service Master', icon: 'inventory_2' },
     { id: 'taxes', title: 'Tax Config', icon: 'percent' },
     { id: 'payment-terms', title: 'Payment Terms', icon: 'credit_card' },
     { id: 'currencies', title: 'Currencies', icon: 'payments' },
-    { id: 'units', title: 'Units (UOM)', icon: 'square_foot' },
+    { id: 'units', title: 'Billing Units', icon: 'square_foot' },
     { id: 'numbering', title: 'Auto Numbering', icon: 'tag' },
     { id: 'customization', title: 'Customizer Builder', icon: 'dashboard_customize' },
     ...(user?.role === 'ADMIN' ? [
-      { id: 'users' as SettingsTab, title: 'User Access Matrix', icon: 'shield_person' },
-      { id: 'audit' as SettingsTab, title: 'Audit Compliance Logs', icon: 'history_toggle_off' },
+      { id: 'users' as SettingsTab, title: 'Team Access & Roles', icon: 'shield_person' },
+      { id: 'audit' as SettingsTab, title: 'Workspace Audit Trail', icon: 'history_toggle_off' },
       { id: 'health' as SettingsTab, title: 'System Diagnostics', icon: 'health_and_safety' },
     ] : []),
   ];
@@ -476,7 +557,7 @@ export default function SettingsPage() {
         
         {/* Central tab wrapper layout */}
         <div className="flex-1 overflow-y-auto p-6 h-full custom-scrollbar select-none">
-          <div className="max-w-3xl mx-auto flex flex-col gap-6 pb-12">
+          <div className="max-w-[1400px] mx-auto flex flex-col gap-6 pb-12">
             
             {/* Page header title details */}
             <div>
@@ -622,6 +703,176 @@ export default function SettingsPage() {
                       className="w-full h-1 bg-surface-variant rounded-lg appearance-none cursor-pointer accent-primary"
                     />
                   </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* PRODUCT / SERVICE MASTER CATALOG TAB */}
+            {/* ======================================================== */}
+            {activeTab === 'products' && (
+              <div className="space-y-6">
+                
+                {/* Form configuration panel */}
+                <div className="bg-surface border border-outline-variant rounded-lg p-5 shadow-sm space-y-4">
+                  <h2 className="font-headline-sm text-headline-sm font-semibold text-on-surface">
+                    {editingProdId ? 'Edit Master Product / Service' : 'Add Product / Service to Master'}
+                  </h2>
+                  <form onSubmit={handleSaveProduct} className="grid grid-cols-2 gap-4 text-body-sm">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">SKU / Item ID (Unique)</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g., SOFT-CALC-PLUGIN" 
+                        value={newProdSku}
+                        onChange={(e) => setNewProdSku(e.target.value)}
+                        required
+                        className="px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none focus:ring-1 focus:ring-primary text-body-sm font-mono font-medium"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Product / Service Name</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g., Age Calculator Plugin" 
+                        value={newProdName}
+                        onChange={(e) => setNewProdName(e.target.value)}
+                        required
+                        className="px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none focus:ring-1 focus:ring-primary text-body-sm font-medium"
+                      />
+                    </div>
+                    <div className="col-span-2 flex flex-col gap-1">
+                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Description / Details</label>
+                      <textarea 
+                        placeholder="Detail service parameters, features, delivery periods, etc." 
+                        value={newProdDesc}
+                        onChange={(e) => setNewProdDesc(e.target.value)}
+                        rows={2}
+                        className="p-3 bg-surface-container-low border border-outline-variant rounded focus:outline-none focus:ring-1 focus:ring-primary text-body-sm font-medium resize-none"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-on-surface-variant font-bold uppercase">Base Rate / Price</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        placeholder="1500.00" 
+                        value={newProdRate}
+                        onChange={(e) => setNewProdRate(Number(e.target.value) || 0)}
+                        required
+                        className="px-3 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none focus:ring-1 focus:ring-primary text-body-sm font-mono font-medium"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-on-surface-variant font-bold uppercase">Unit (UOM)</label>
+                        <select
+                          value={newProdUnitId}
+                          onChange={(e) => setNewProdUnitId(e.target.value)}
+                          className="px-2 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none focus:ring-1 focus:ring-primary text-body-sm font-medium"
+                        >
+                          <option value="">No Unit</option>
+                          {units.map(u => (
+                            <option key={u.id} value={u.id}>{u.code} ({u.name})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-on-surface-variant font-bold uppercase">Tax Policy</label>
+                        <select
+                          value={newProdTaxId}
+                          onChange={(e) => setNewProdTaxId(e.target.value)}
+                          className="px-2 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none focus:ring-1 focus:ring-primary text-body-sm font-medium"
+                        >
+                          <option value="">Exempt</option>
+                          {taxes.map(t => (
+                            <option key={t.id} value={t.id}>{t.code} ({Number(t.ratePercent)}%)</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 flex gap-2 justify-start mt-2">
+                      <button 
+                        type="submit"
+                        className="bg-primary text-on-primary hover:bg-primary-fixed-variant transition-colors font-bold h-8 px-6 rounded flex items-center justify-center shadow-sm select-none active:scale-95"
+                      >
+                        {editingProdId ? 'Save Product Changes' : 'Register Product / Service'}
+                      </button>
+                      {editingProdId && (
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setEditingProdId(null);
+                            setNewProdSku('');
+                            setNewProdName('');
+                            setNewProdDesc('');
+                            setNewProdRate(0);
+                            setNewProdUnitId('');
+                            setNewProdTaxId('');
+                          }}
+                          className="bg-surface border border-outline-variant hover:bg-surface-container-low transition-colors font-semibold h-8 px-4 rounded flex items-center justify-center select-none active:scale-95"
+                        >
+                          Cancel Edit
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+
+                {/* Master table listing */}
+                <div className="bg-surface border border-outline-variant rounded-lg overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse text-body-sm">
+                    <thead>
+                      <tr className="bg-surface-container-low border-b border-outline-variant text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">
+                        <th className="p-3 w-[15%]">SKU</th>
+                        <th className="p-3 w-[30%]">Product / Service</th>
+                        <th className="p-3 w-[25%]">Description</th>
+                        <th className="p-3 w-[12%] text-right">Price</th>
+                        <th className="p-3 w-[10%] text-center">Unit</th>
+                        <th className="p-3 w-[8%] text-right"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant font-medium">
+                      {products.map(p => (
+                        <tr key={p.id} className="hover:bg-surface-container-lowest transition-colors">
+                          <td className="p-3 font-mono text-[11px] font-semibold truncate">{p.sku}</td>
+                          <td className="p-3 font-bold truncate">{p.name}</td>
+                          <td className="p-3 text-on-surface-variant font-normal truncate">{p.description || '—'}</td>
+                          <td className="p-3 text-right font-mono text-primary font-bold">
+                            ${Number(p.rate).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-3 text-center text-on-surface-variant font-semibold">{p.unit?.code || '—'}</td>
+                          <td className="p-3 text-right">
+                            <div className="flex justify-end gap-1.5">
+                              <button 
+                                onClick={() => handleEditProduct(p)}
+                                className="text-on-surface-variant hover:text-primary transition-colors p-1"
+                                title="Edit product"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">edit</span>
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteProduct(p.id)}
+                                className="text-on-surface-variant hover:text-error transition-colors p-1"
+                                title="Delete product"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">delete</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {products.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="p-6 text-center text-on-surface-variant/70 italic bg-surface-container-lowest">
+                            No product or service catalog entries registered in the master list.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
 
               </div>
@@ -1617,7 +1868,7 @@ export default function SettingsPage() {
             <div className="flex flex-col">
               <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">MFA Security key</span>
               <span className="text-[11px] text-on-surface-variant font-mono bg-surface-container-low border border-outline-variant/60 px-2 py-1.5 rounded select-all mt-1">
-                {mfaEnabled ? 'df-secret-totp-xyz' : 'Disabled'}
+                {mfaEnabled ? (user?.mfaSecret || 'Generating...') : 'Disabled'}
               </span>
             </div>
           </div>

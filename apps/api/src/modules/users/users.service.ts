@@ -14,9 +14,26 @@ export class UsersService {
   }
 
   async updateUser(id: string, data: { firstName?: string; lastName?: string; mfaEnabled?: boolean }) {
+    const updateData: any = { ...data };
+    if (data.mfaEnabled !== undefined) {
+      if (data.mfaEnabled) {
+        const user = await this.prisma.user.findUnique({ where: { id } });
+        if (!user?.mfaSecret) {
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+          let secret = '';
+          for (let i = 0; i < 16; i++) {
+            secret += chars.charAt(Math.floor(Math.random() * chars.length));
+          }
+          updateData.mfaSecret = secret;
+        }
+      } else {
+        updateData.mfaSecret = null;
+      }
+    }
+
     return this.prisma.user.update({
       where: { id },
-      data,
+      data: updateData,
       select: {
         id: true,
         email: true,
@@ -24,6 +41,7 @@ export class UsersService {
         lastName: true,
         role: true,
         mfaEnabled: true,
+        mfaSecret: true,
         createdAt: true,
         updatedAt: true,
       }

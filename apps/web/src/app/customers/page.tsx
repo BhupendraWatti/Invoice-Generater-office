@@ -249,6 +249,16 @@ export default function CustomersPage() {
     }
   };
 
+  const handleDeleteDocument = async (docId: string, docTitle: string) => {
+    if (!confirm(`Are you sure you want to permanently delete document "${docTitle}"?`)) return;
+    try {
+      await api.documents.delete(docId);
+      setLinkedDocuments(prev => prev.filter(d => d.id !== docId));
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete document.');
+    }
+  };
+
   const getDocBadge = (type: string) => {
     switch (type) {
       case 'INVOICE': return 'bg-secondary-container text-on-secondary-container';
@@ -312,7 +322,7 @@ export default function CustomersPage() {
           ) : !selectedCustomerDetail ? (
             <div className="p-8 text-center text-body-md text-on-surface-variant italic select-none">No client selected in directory.</div>
           ) : (
-            <div className="max-w-4xl mx-auto flex flex-col gap-stack-lg pb-12">
+            <div className="max-w-[1400px] mx-auto flex flex-col gap-stack-lg pb-12">
               
               {/* Profile Block */}
               <div className="bg-surface border border-outline-variant rounded-lg p-5 flex justify-between items-start shadow-sm">
@@ -404,8 +414,22 @@ export default function CustomersPage() {
                             <td className="p-3 select-none">
                               <span className="font-body-sm text-body-sm text-on-surface-variant">{doc.status}</span>
                             </td>
-                            <td className="p-3 font-body-sm text-body-sm text-on-surface-variant text-right select-none">
-                              {new Date(doc.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            <td className="p-3 font-body-sm text-body-sm text-on-surface-variant select-none">
+                              <div className="flex items-center justify-end gap-3">
+                                <span>{new Date(doc.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDeleteDocument(doc.id, doc.title);
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center rounded hover:bg-error-container hover:text-error text-on-surface-variant transition-colors opacity-0 group-hover:opacity-100"
+                                  title="Delete Document"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -626,7 +650,7 @@ export default function CustomersPage() {
                           className="h-8 border border-outline-variant rounded text-body-sm px-2 focus:ring-1 focus:ring-primary focus:outline-none text-on-surface"
                         >
                           <option value="BILLING">Billing Address</option>
-                          <option value="SHIPPING">Shipping Address</option>
+                          <option value="SHIPPING">Registered Office</option>
                         </select>
                       </div>
                       <div className="flex items-center gap-1.5 mt-5">

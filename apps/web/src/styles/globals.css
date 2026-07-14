@@ -86,3 +86,9 @@
   --text-label-md: 12px;
   --text-label-sm: 11px;
 }
+
+/* Fix text clipping on all h-8 inputs and select elements */
+input.h-8, select.h-8, .h-8 {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}

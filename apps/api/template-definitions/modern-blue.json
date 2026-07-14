@@ -1,0 +1,349 @@
+{
+  "meta": {
+    "id": "modern-blue",
+    "name": "Modern Blue Theme",
+    "category": "INVOICE",
+    "isDefault": false,
+    "extends": "base-classic",
+    "description": "A contemporary child layout with dark primary slate hues",
+    "version": 1
+  },
+  "page": {
+    "size": "A4",
+    "orientation": "portrait",
+    "margins": {
+      "top": 36,
+      "right": 36,
+      "bottom": 36,
+      "left": 36
+    }
+  },
+  "theme": {
+    "fonts": {
+      "heading": "Helvetica-Bold",
+      "body": "Helvetica",
+      "mono": "Courier"
+    },
+    "baseFontSize": 10,
+    "colors": {
+      "primary": "#0D9488",
+      "text": "#1F2937",
+      "muted": "#6B7280",
+      "border": "#F3F4F6",
+      "tableHeaderBg": "#E6F4F2",
+      "tableHeaderText": "#0F766E",
+      "zebraBg": "#F0F9F8"
+    }
+  },
+  "logo": {
+    "enabled": true,
+    "position": "left",
+    "maxWidth": 120,
+    "maxHeight": 50,
+    "source": "branding"
+  },
+  "header": {
+    "showTitle": true,
+    "titleText": "{document.type}",
+    "showDocMeta": true,
+    "accentBar": true
+  },
+  "organization": {
+    "showHeading": false,
+    "heading": "Organization Details",
+    "fields": [
+      {
+        "key": "name",
+        "label": "Company Name",
+        "visible": true,
+        "order": 0
+      },
+      {
+        "key": "addressLine1",
+        "label": "Address Line 1",
+        "visible": true,
+        "order": 1
+      },
+      {
+        "key": "addressLine2",
+        "label": "Address Line 2",
+        "visible": true,
+        "order": 2
+      },
+      {
+        "key": "city",
+        "label": "City",
+        "visible": true,
+        "order": 3
+      },
+      {
+        "key": "postalCode",
+        "label": "Postal Code",
+        "visible": true,
+        "order": 4
+      },
+      {
+        "key": "country",
+        "label": "Country",
+        "visible": true,
+        "order": 5
+      },
+      {
+        "key": "taxId",
+        "label": "Tax ID / Registration",
+        "visible": true,
+        "order": 6
+      },
+      {
+        "key": "gst",
+        "label": "GSTIN",
+        "visible": true,
+        "order": 7
+      }
+    ]
+  },
+  "customer": {
+    "showBillTo": true,
+    "billToHeading": "Bill To",
+    "showShipTo": false,
+    "shipToHeading": "Ship To",
+    "fields": [
+      {
+        "key": "name",
+        "label": "Client Name",
+        "visible": true,
+        "order": 0
+      },
+      {
+        "key": "addressLine1",
+        "label": "Billing Address",
+        "visible": true,
+        "order": 1
+      },
+      {
+        "key": "addressLine2",
+        "label": "Address Line 2",
+        "visible": true,
+        "order": 2
+      },
+      {
+        "key": "city",
+        "label": "City",
+        "visible": true,
+        "order": 3
+      },
+      {
+        "key": "postalCode",
+        "label": "Postal Code",
+        "visible": true,
+        "order": 4
+      },
+      {
+        "key": "country",
+        "label": "Country",
+        "visible": true,
+        "order": 5
+      },
+      {
+        "key": "email",
+        "label": "Email",
+        "visible": true,
+        "order": 6
+      },
+      {
+        "key": "phone",
+        "label": "Phone",
+        "visible": true,
+        "order": 7
+      }
+    ]
+  },
+  "documentDetails": {
+    "show": true,
+    "fields": [
+      {
+        "key": "number",
+        "label": "Document Number",
+        "visible": true,
+        "order": 0
+      },
+      {
+        "key": "date",
+        "label": "Date",
+        "visible": true,
+        "order": 1
+      },
+      {
+        "key": "dueDate",
+        "label": "Due Date",
+        "visible": true,
+        "order": 2
+      },
+      {
+        "key": "terms",
+        "label": "Payment Terms",
+        "visible": true,
+        "order": 3
+      }
+    ]
+  },
+  "table": {
+    "columns": [
+      {
+        "key": "index",
+        "label": "#",
+        "visible": true,
+        "width": 5,
+        "align": "center",
+        "order": 0
+      },
+      {
+        "key": "description",
+        "label": "Item & Description",
+        "visible": true,
+        "width": 45,
+        "align": "left",
+        "order": 1
+      },
+      {
+        "key": "quantity",
+        "label": "Qty",
+        "visible": true,
+        "width": 10,
+        "align": "right",
+        "order": 2
+      },
+      {
+        "key": "rate",
+        "label": "Unit Rate",
+        "visible": true,
+        "width": 15,
+        "align": "right",
+        "order": 3
+      },
+      {
+        "key": "tax",
+        "label": "Tax Rate",
+        "visible": false,
+        "width": 10,
+        "align": "right",
+        "order": 4
+      },
+      {
+        "key": "amount",
+        "label": "Amount",
+        "visible": true,
+        "width": 15,
+        "align": "right",
+        "order": 5
+      }
+    ],
+    "zebra": true,
+    "showBorders": false,
+    "compact": false
+  },
+  "totals": {
+    "rows": [
+      {
+        "key": "subtotal",
+        "label": "Subtotal",
+        "visible": true,
+        "order": 0,
+        "emphasis": false
+      },
+      {
+        "key": "discount",
+        "label": "Discount",
+        "visible": false,
+        "order": 1,
+        "emphasis": false
+      },
+      {
+        "key": "tax",
+        "label": "Tax Total",
+        "visible": true,
+        "order": 2,
+        "emphasis": false
+      },
+      {
+        "key": "shipping",
+        "label": "Shipping Charges",
+        "visible": false,
+        "order": 3,
+        "emphasis": false
+      },
+      {
+        "key": "grandTotal",
+        "label": "Total Due",
+        "visible": true,
+        "order": 4,
+        "emphasis": true
+      }
+    ],
+    "showAmountInWords": false
+  },
+  "payment": {
+    "show": true,
+    "heading": "Payment Instructions",
+    "instructions": "Please transfer payments directly to the designated bank credentials listed below. Reference the document number in the transaction memo."
+  },
+  "bank": {
+    "show": true,
+    "heading": "Bank Transfer Details",
+    "source": "company",
+    "fields": [
+      {
+        "key": "bankName",
+        "label": "Bank Name",
+        "visible": true,
+        "order": 0
+      },
+      {
+        "key": "accountHolder",
+        "label": "Account Name",
+        "visible": true,
+        "order": 1
+      },
+      {
+        "key": "accountNumber",
+        "label": "Account Number",
+        "visible": true,
+        "order": 2
+      },
+      {
+        "key": "iban",
+        "label": "IBAN Code",
+        "visible": true,
+        "order": 3
+      },
+      {
+        "key": "bic",
+        "label": "BIC / SWIFT",
+        "visible": true,
+        "order": 4
+      }
+    ]
+  },
+  "notes": {
+    "show": true,
+    "heading": "Notes & Declarations",
+    "text": "Thank you for your business. For any queries regarding service delivery timelines, please contact our support desk."
+  },
+  "signature": {
+    "show": true,
+    "label": "Authorized Signatory",
+    "source": "branding",
+    "showStamp": true
+  },
+  "watermark": {
+    "enabled": false,
+    "text": "DRAFT COPY",
+    "opacity": 0.15,
+    "angle": 45
+  },
+  "footer": {
+    "show": true,
+    "text": "Granth Infotech Private Limited — Services & Software Delivery Division",
+    "showPageNumbers": true
+  }
+}

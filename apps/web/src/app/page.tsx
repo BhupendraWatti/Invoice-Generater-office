@@ -124,7 +124,7 @@ export default function OperationalWorkspacePage() {
         
         {/* Left Pane: Central Scrollable Workspace Canvas */}
         <div className="flex-1 overflow-y-auto p-6 h-full custom-scrollbar">
-          <div className="max-w-5xl mx-auto flex flex-col gap-6 pb-12">
+          <div className="max-w-[1400px] mx-auto flex flex-col gap-6 pb-12">
             
             {/* Page Header */}
             <div className="flex justify-between items-center select-none">

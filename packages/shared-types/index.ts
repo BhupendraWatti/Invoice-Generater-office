@@ -5,6 +5,7 @@ export interface UserDto {
   lastName: string;
   role: 'ADMIN' | 'MANAGER' | 'USER' | 'AUDITOR';
   mfaEnabled: boolean;
+  mfaSecret?: string | null;
   createdAt: string;
 }
 
@@ -34,6 +35,12 @@ export interface DocumentDto {
   companyId?: string;
   customerId?: string;
   authorId: string;
+  accentColor?: string | null;
+  fontFamily?: string | null;
+  showWatermark?: boolean;
+  watermarkText?: string | null;
+  showStamp?: boolean;
+  templateId?: string | null;
   createdAt: string;
   updatedAt: string;
   blocks?: any[];
@@ -373,6 +380,8 @@ export interface RenewalDto {
   paymentStatus: string; // UNPAID, PAID, OVERDUE
   assignedEmployee?: string | null;
   notes?: string | null;
+  emailId?: string | null;
+  password?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -457,6 +466,257 @@ export interface RecurringConfigDto {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/* ============================================================================
+ * Template Engine (Template Designer) — presentation-layer definitions.
+ * These describe HOW an invoice/document is rendered to DOCX/PDF. They never
+ * hold invoice data; invoice data stays owned by the Document APIs.
+ * ========================================================================== */
+
+export type TemplateCategory =
+  | 'INVOICE'
+  | 'PROPOSAL'
+  | 'QUOTATION'
+  | 'RECEIPT'
+  | 'PURCHASE_ORDER'
+  | 'PROFORMA_INVOICE'
+  | 'CREDIT_NOTE'
+  | 'DEBIT_NOTE'
+  | 'AGREEMENT';
+
+export type Align = 'left' | 'center' | 'right';
+
+export interface TemplateMeta {
+  id: string;
+  name: string;
+  category: TemplateCategory;
+  isDefault: boolean;
+  /** id of the template this one inherits from (deep-merged at resolve time). */
+  extends?: string | null;
+  description?: string;
+  version: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PageConfig {
+  size: 'A4' | 'LETTER';
+  orientation: 'portrait' | 'landscape';
+  margins: { top: number; right: number; bottom: number; left: number }; // points
+}
+
+export interface ThemeConfig {
+  fonts: { heading: string; body: string; mono: string };
+  baseFontSize: number; // points
+  colors: {
+    primary: string;
+    text: string;
+    muted: string;
+    border: string;
+    tableHeaderBg: string;
+    tableHeaderText: string;
+    zebraBg: string;
+  };
+}
+
+export interface LogoConfig {
+  enabled: boolean;
+  position: Align;
+  maxWidth: number; // points
+  maxHeight: number; // points
+  /** 'branding' pulls CompanyBranding.logoUrl; 'url' uses `url`. */
+  source: 'branding' | 'url';
+  url?: string;
+}
+
+export interface HeaderConfig {
+  showTitle: boolean;
+  /** Supports tokens like {document.type}. */
+  titleText: string;
+  showDocMeta: boolean;
+  accentBar: boolean; // colored bar under header
+}
+
+export interface FieldConfig {
+  key: string;
+  label: string;
+  visible: boolean;
+  order: number;
+}
+
+export interface OrganizationConfig {
+  showHeading: boolean;
+  heading: string;
+  fields: FieldConfig[]; // name, addressLine1, city, taxId, gst, email, phone...
+}
+
+export interface CustomerConfig {
+  showBillTo: boolean;
+  billToHeading: string;
+  showShipTo: boolean;
+  shipToHeading: string;
+  fields: FieldConfig[];
+}
+
+export interface DocumentDetailsConfig {
+  show: boolean;
+  fields: FieldConfig[]; // number, date, dueDate, terms, reference...
+}
+
+export interface TableColumnConfig {
+  key: 'index' | 'sku' | 'description' | 'quantity' | 'unit' | 'rate' | 'tax' | 'amount' | string;
+  label: string;
+  visible: boolean;
+  width: number; // percentage of table width
+  align: Align;
+  order: number;
+}
+
+export interface TableConfig {
+  columns: TableColumnConfig[];
+  zebra: boolean;
+  showBorders: boolean;
+  compact: boolean;
+}
+
+export interface TotalRowConfig {
+  key: 'subtotal' | 'discount' | 'tax' | 'shipping' | 'adjustment' | 'grandTotal' | string;
+  label: string;
+  visible: boolean;
+  order: number;
+  emphasis: boolean;
+}
+
+export interface TotalsConfig {
+  rows: TotalRowConfig[];
+  showAmountInWords: boolean;
+}
+
+export interface PaymentConfig {
+  show: boolean;
+  heading: string;
+  instructions: string;
+}
+
+export interface BankConfig {
+  show: boolean;
+  heading: string;
+  /** 'company' pulls from the linked company's bank fields. */
+  source: 'company' | 'custom';
+  fields: FieldConfig[];
+  custom?: Record<string, string>;
+}
+
+export interface NotesConfig {
+  show: boolean;
+  heading: string;
+  text: string; // default when the document has no NOTES block
+}
+
+export interface SignatureConfig {
+  show: boolean;
+  label: string;
+  /** 'branding' uses CompanyBranding.signatures[0]. */
+  source: 'branding' | 'none';
+  showStamp: boolean;
+}
+
+export interface WatermarkConfig {
+  enabled: boolean;
+  text: string;
+  opacity: number; // 0..1
+  angle: number; // degrees
+}
+
+export interface FooterConfig {
+  show: boolean;
+  text: string;
+  showPageNumbers: boolean;
+}
+
+export interface TemplateDefinitionDto {
+  meta: TemplateMeta;
+  page: PageConfig;
+  theme: ThemeConfig;
+  logo: LogoConfig;
+  header: HeaderConfig;
+  organization: OrganizationConfig;
+  customer: CustomerConfig;
+  documentDetails: DocumentDetailsConfig;
+  table: TableConfig;
+  totals: TotalsConfig;
+  payment: PaymentConfig;
+  bank: BankConfig;
+  notes: NotesConfig;
+  signature: SignatureConfig;
+  watermark: WatermarkConfig;
+  footer: FooterConfig;
+}
+
+/** Partial template as persisted for a child template (only overrides + meta). */
+export type TemplateDefinitionInput = { meta: Partial<TemplateMeta> & { name: string } } & Partial<
+  Omit<TemplateDefinitionDto, 'meta'>
+>;
+
+/* ---- Normalized invoice view-model produced by the mapper (render input) ---- */
+
+export interface InvoiceLineItem {
+  index: number;
+  sku: string;
+  description: string;
+  type?: string;
+  quantity: number;
+  unit: string;
+  rate: number;
+  taxLabel: string;
+  taxRate: number;
+  taxAmount: number;
+  amount: number; // quantity * rate
+}
+
+export interface InvoiceParty {
+  name: string;
+  lines: string[]; // formatted address / contact lines
+  taxId?: string;
+  gst?: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface InvoiceData {
+  documentId: string;
+  documentType: string;
+  documentNumber: string;
+  title: string;
+  status: string;
+  issueDate: string;
+  dueDate?: string;
+  currencySymbol: string;
+  organization: InvoiceParty;
+  billTo: InvoiceParty;
+  shipTo?: InvoiceParty;
+  items: InvoiceLineItem[];
+  subtotal: number;
+  discount: number;
+  taxTotal: number;
+  shipping: number;
+  adjustment: number;
+  grandTotal: number;
+  notes: string;
+  bank?: { bankName?: string; accountHolder?: string; accountNumber?: string; iban?: string; bic?: string; gstNumber?: string };
+  logoUrl?: string;
+  qrUrl?: string;
+  signatureUrl?: string;
+  stampUrl?: string;
+}
+
+export interface RenderResponseDto {
+  success: boolean;
+  filename: string;
+  mimeType: string;
+  base64: string;
+  sizeBytes: number;
 }
 
 export interface CustomFieldConfigDto {

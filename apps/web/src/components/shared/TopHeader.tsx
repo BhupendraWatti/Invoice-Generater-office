@@ -18,6 +18,20 @@ export default function TopHeader({ onSearchClick, onNewDocumentClick }: TopHead
   const [menuOpen, setMenuOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
+  // Message / Workspace activity states
+  const [activities, setActivities] = useState<any[]>([]);
+  const [msgMenuOpen, setMsgMenuOpen] = useState(false);
+  const msgPopoverRef = useRef<HTMLDivElement>(null);
+
+  const loadActivities = async () => {
+    try {
+      const list = await api.activities.list(10);
+      setActivities(list);
+    } catch (err) {
+      console.error('Failed to load activities:', err);
+    }
+  };
+
   // Company Switcher states
   const [companies, setCompanies] = useState<any[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState('');
@@ -50,8 +64,12 @@ export default function TopHeader({ onSearchClick, onNewDocumentClick }: TopHead
   useEffect(() => {
     loadNotifications();
     loadCompanies();
-    // Poll notifications status every 10 seconds for real-time responsiveness
-    const timer = setInterval(loadNotifications, 10000);
+    loadActivities();
+    // Poll status every 10 seconds for real-time responsiveness
+    const timer = setInterval(() => {
+      loadNotifications();
+      loadActivities();
+    }, 10000);
     return () => clearInterval(timer);
   }, []);
 
@@ -66,6 +84,9 @@ export default function TopHeader({ onSearchClick, onNewDocumentClick }: TopHead
     function handleClickOutside(event: MouseEvent) {
       if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
+      }
+      if (msgPopoverRef.current && !msgPopoverRef.current.contains(event.target as Node)) {
+        setMsgMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -103,7 +124,7 @@ export default function TopHeader({ onSearchClick, onNewDocumentClick }: TopHead
   };
 
   return (
-    <header className="bg-surface border-b border-outline-variant flex justify-between items-center h-12 px-6 shrink-0 z-40 relative w-full pr-[320px]">
+    <header className="bg-surface border-b border-outline-variant flex justify-between items-center h-12 px-6 shrink-0 z-40 relative w-full">
       
       {/* Left: Search Bar Trigger */}
       <div 
@@ -158,27 +179,73 @@ export default function TopHeader({ onSearchClick, onNewDocumentClick }: TopHead
           New Document
         </button>
         
-        <div className="flex items-center space-x-3 text-on-surface-variant relative" ref={popoverRef}>
-          <button className="hover:text-primary transition-colors cursor-pointer p-1 rounded-full hover:bg-surface-container flex items-center justify-center">
-            <span className="material-symbols-outlined text-[20px]">comment</span>
-          </button>
+        <div className="flex items-center space-x-3 text-on-surface-variant">
+          {/* Message / Activity comments popover */}
+          <div className="relative" ref={msgPopoverRef}>
+            <button 
+              onClick={() => setMsgMenuOpen(!msgMenuOpen)}
+              className="hover:text-primary transition-colors cursor-pointer p-1 rounded-full hover:bg-surface-container flex items-center justify-center relative"
+              title="Workspace Activity Logs"
+            >
+              <span className="material-symbols-outlined text-[20px]">comment</span>
+              {activities.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-primary text-on-primary rounded-full flex items-center justify-center text-[8px] font-bold">
+                  {activities.length}
+                </span>
+              )}
+            </button>
+
+            {/* Interactive Message / Comments Feed Popover */}
+            {msgMenuOpen && (
+              <div className="absolute right-0 top-10 w-[420px] bg-surface border border-outline-variant shadow-xl rounded-xl z-50 overflow-hidden flex flex-col max-h-[460px] animate-fade-in select-none">
+                <div className="p-3 border-b border-outline-variant bg-surface-container-lowest flex justify-between items-center h-10 shrink-0">
+                  <span className="font-semibold text-label-md text-on-surface">Workspace Comments Feed</span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto divide-y divide-outline-variant/60 custom-scrollbar text-body-sm font-semibold text-on-surface-variant">
+                  {activities.length === 0 ? (
+                    <div className="p-8 text-center text-[10px] italic text-on-surface-variant/80">No recent workspace activities or comments.</div>
+                  ) : (
+                    activities.map((act) => (
+                      <div 
+                        key={act.id} 
+                        className="p-3 flex items-start gap-3 hover:bg-surface-container-low/60 transition-all border-l-4 border-l-primary/40 bg-surface hover:border-l-primary hover:-translate-y-[0.5px]"
+                      >
+                        <span className="material-symbols-outlined text-[18px] text-primary shrink-0 mt-0.5">
+                          forum
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] leading-relaxed text-on-surface font-semibold select-text">{act.details}</p>
+                          <span className="text-[9px] text-on-surface-variant/60 block mt-1.5 font-mono">
+                            {new Date(act.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })} • {new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           
           {/* Notification bell trigger */}
-          <button 
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="hover:text-primary transition-colors cursor-pointer p-1 rounded-full hover:bg-surface-container flex items-center justify-center relative"
-          >
-            <span className="material-symbols-outlined text-[20px]">notifications</span>
-            {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-error text-on-error rounded-full flex items-center justify-center text-[9px] font-bold font-mono">
-                {unreadCount}
-              </span>
-            )}
-          </button>
+          <div className="relative" ref={popoverRef}>
+            <button 
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="hover:text-primary transition-colors cursor-pointer p-1 rounded-full hover:bg-surface-container flex items-center justify-center relative"
+              title="Notification Center"
+            >
+              <span className="material-symbols-outlined text-[20px]">notifications</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-error text-on-error rounded-full flex items-center justify-center text-[9px] font-bold font-mono">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
 
-          {/* Interactive Notifications Popover Menu */}
-          {menuOpen && (
-            <div className="absolute right-0 top-10 w-[290px] bg-surface border border-outline-variant shadow-xl rounded-xl z-50 overflow-hidden flex flex-col max-h-[360px] animate-fade-in select-none">
+            {/* Interactive Notifications Popover Menu */}
+            {menuOpen && (
+              <div className="absolute right-0 top-10 w-[420px] bg-surface border border-outline-variant shadow-xl rounded-xl z-50 overflow-hidden flex flex-col max-h-[460px] animate-fade-in select-none">
               
               <div className="p-3 border-b border-outline-variant bg-surface-container-lowest flex justify-between items-center h-10 shrink-0">
                 <span className="font-semibold text-label-md text-on-surface">Notification Center</span>
@@ -198,23 +265,33 @@ export default function TopHeader({ onSearchClick, onNewDocumentClick }: TopHead
                 ) : (
                   notifications.map((n) => {
                     const badge = getNotifIcon(n.type);
+                    const borderLeftColor = 
+                      n.type === 'SUCCESS' ? 'border-l-primary' :
+                      n.type === 'WARNING' ? 'border-l-amber-500' :
+                      n.type === 'ERROR' ? 'border-l-error' : 'border-l-outline';
+
                     return (
                       <div 
                         key={n.id} 
                         onClick={() => handleMarkRead(n.id)}
-                        className={`p-3 flex items-start gap-2.5 cursor-pointer transition-colors hover:bg-surface-container-low/40
-                          ${!n.isRead ? 'bg-primary-container/5' : ''}`}
+                        className={`p-3 flex items-start gap-3 cursor-pointer border-l-4 ${borderLeftColor} transition-all hover:bg-surface-container-low/60 hover:-translate-y-[0.5px]
+                          ${!n.isRead ? 'bg-surface-container-lowest' : 'opacity-85 bg-surface'}`}
                       >
-                        <span className={`material-symbols-outlined text-[16px] shrink-0 mt-0.5 ${badge.color}`}>
+                        <span className={`material-symbols-outlined text-[18px] shrink-0 mt-0.5 ${badge.color}`}>
                           {badge.icon}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <div className={`text-[11px] truncate ${!n.isRead ? 'font-bold text-on-surface' : 'text-on-surface-variant'}`}>
-                            {n.title}
+                          <div className="flex justify-between items-start gap-1">
+                            <span className={`text-[11px] font-bold truncate ${!n.isRead ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                              {n.title}
+                            </span>
+                            {!n.isRead && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1"></span>
+                            )}
                           </div>
-                          <p className="text-[10px] leading-tight text-on-surface-variant font-medium mt-0.5 select-text">{n.message}</p>
-                          <span className="text-[9px] text-on-surface-variant/70 block mt-1 font-mono">
-                            {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          <p className="text-[10px] leading-relaxed text-on-surface-variant font-medium mt-0.5 select-text">{n.message}</p>
+                          <span className="text-[9px] text-on-surface-variant/60 block mt-1.5 font-mono">
+                            {new Date(n.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })} • {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                       </div>
@@ -226,6 +303,7 @@ export default function TopHeader({ onSearchClick, onNewDocumentClick }: TopHead
           )}
         </div>
       </div>
-    </header>
+    </div>
+  </header>
   );
 }

@@ -308,7 +308,7 @@ export default function TemplatesPage() {
               )
             ) : (
               /* Interactive Visual Drag-and-Drop Block Designer Canvas */
-              <div className="flex gap-6 max-w-4xl mx-auto items-start select-none">
+              <div className="flex gap-6 max-w-[1400px] mx-auto items-start select-none">
                 
                 {/* Visual Canvas Page sheet */}
                 <div 

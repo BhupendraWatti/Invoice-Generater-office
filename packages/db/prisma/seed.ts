@@ -1,10 +1,12 @@
-import { PrismaClient, UserRole, DocumentType, DocumentStatus, ActivityType, RenewalType } from '@prisma/client';
+import { PrismaClient, UserRole } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding database...');
-  // Clean up
+  console.log('Seeding database with clean configuration...');
+  
+  // Clean up existing records in dependency order
+  await prisma.reminderLog.deleteMany();
   await prisma.comment.deleteMany();
   await prisma.renewal.deleteMany();
   await prisma.activity.deleteMany();
@@ -13,165 +15,71 @@ async function main() {
   await prisma.customer.deleteMany();
   await prisma.company.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.product.deleteMany();
+  await prisma.unit.deleteMany();
+  await prisma.taxConfiguration.deleteMany();
+  await prisma.paymentTerm.deleteMany();
+  await prisma.currency.deleteMany();
 
-  // Create Users
-  const userAlex = await prisma.user.create({
+  // 1. Create Default Admin User
+  const admin = await prisma.user.create({
     data: {
-      email: 'alex@docflow.studio',
-      passwordHash: '$2b$10$f2PmsJn/kbuMR2OEkB89keEUJP0Rz9gfrWaHADNjkcGgq3/FWuV3W', // password: admin123
+      email: 'admin',
+      passwordHash: '$2b$10$5i1j1pgm35uDabhUy7bEqOIrUurgb7/JGwCNcy9bPyhLetKPowTVW', // password: admin
       firstName: 'Alex',
       lastName: 'Carter',
       role: UserRole.ADMIN,
       mfaEnabled: false,
     }
   });
+  console.log('Admin user initialized successfully.');
 
-  const userSarah = await prisma.user.create({
-    data: {
-      email: 'sarah.j@docflow.studio',
-      passwordHash: '$2b$10$f2PmsJn/kbuMR2OEkB89keEUJP0Rz9gfrWaHADNjkcGgq3/FWuV3W', // password: admin123
-      firstName: 'Sarah',
-      lastName: 'Jenkins',
-      role: UserRole.MANAGER,
-    }
-  });
-
-  const userMike = await prisma.user.create({
-    data: {
-      email: 'mike.t@docflow.studio',
-      passwordHash: '$2b$10$f2PmsJn/kbuMR2OEkB89keEUJP0Rz9gfrWaHADNjkcGgq3/FWuV3W', // password: admin123
-      firstName: 'Mike',
-      lastName: 'Taylor',
-      role: UserRole.USER,
-    }
-  });
-
-  // Create Companies
-  const companyAcme = await prisma.company.create({
-    data: {
-      name: 'Acme Properties LLC',
-      registrationNumber: 'REG-1234567',
-      taxId: 'TX-9876543',
-      addressLine1: '123 Enterprise Way',
-      addressLine2: 'Suite 400',
-      city: 'Austin',
-      postalCode: '78701',
-      country: 'USA',
-      bankName: 'Silicon Valley Bank',
-      bankIban: 'US12345678901234567890',
-      bankBic: 'SVB123',
-    }
-  });
-
-  // Create Customers
-  const customerGlobex = await prisma.customer.create({
-    data: {
-      companyId: companyAcme.id,
-      name: 'Globex Inc.',
-      email: 'billing@globex.com',
-      phone: '+1 555-0199',
-      addressLine1: '456 Globex Road',
-      city: 'San Francisco',
-      postalCode: '94103',
-      country: 'USA',
-    }
-  });
-
-  // Create Documents
-  const docPdf = await prisma.document.create({
-    data: {
-      title: 'Q3_Financial_Report_Final.pdf',
-      type: DocumentType.PDF,
-      status: DocumentStatus.REVIEW,
-      companyId: companyAcme.id,
-      customerId: customerGlobex.id,
-      authorId: userSarah.id,
-    }
-  });
-
-  const docDocx = await prisma.document.create({
-    data: {
-      title: 'Acme_Corp_MSA_Draft_v2.docx',
-      type: DocumentType.DOCX,
-      status: DocumentStatus.DRAFT,
-      companyId: companyAcme.id,
-      customerId: customerGlobex.id,
-      authorId: userMike.id,
-    }
-  });
-
-  const docZip = await prisma.document.create({
-    data: {
-      title: 'Marketing_Campaign_Assets.zip',
-      type: DocumentType.ZIP,
-      status: DocumentStatus.COMPLETED,
-      companyId: companyAcme.id,
-      customerId: customerGlobex.id,
-      authorId: userAlex.id,
-    }
-  });
-
-  // Create Activities
-  await prisma.activity.createMany({
+  // 2. Seed Standard Billing Units (UOM)
+  await prisma.unit.createMany({
     data: [
-      {
-        userId: userSarah.id,
-        actionType: ActivityType.EDIT,
-        documentId: docPdf.id,
-        details: 'Sarah J. edited Q3_Financial_Report_Final.pdf',
-      },
-      {
-        userId: userMike.id,
-        actionType: ActivityType.COMMENT,
-        documentId: docDocx.id,
-        details: 'Mike T. commented on Acme_Corp_MSA_Draft_v2.docx',
-      },
-      {
-        userId: userAlex.id,
-        actionType: ActivityType.APPROVE,
-        documentId: docZip.id,
-        details: 'System approved Marketing_Campaign_Assets.zip',
-      }
+      { code: 'HRS', name: 'Hourly Rates' },
+      { code: 'DAYS', name: 'Daily Services' },
+      { code: 'MOS', name: 'Monthly Retainer' },
+      { code: 'PROJ', name: 'Fixed Project Scope' },
+      { code: 'PCS', name: 'Software Licenses' },
     ]
   });
+  console.log('Billing units initialized.');
 
-  // Create Comments
-  await prisma.comment.create({
-    data: {
-      documentId: docDocx.id,
-      userId: userMike.id,
-      text: 'Please review row 45...',
-    }
-  });
-
-  // Create Renewals
-  await prisma.renewal.createMany({
+  // 3. Seed Standard Tax Policies
+  await prisma.taxConfiguration.createMany({
     data: [
-      {
-        itemName: 'Software Lic. X',
-        renewalType: RenewalType.SOFTWARE,
-        renewalDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // in 3 days
-        amount: 1200.00,
-        status: 'PENDING',
-      },
-      {
-        itemName: 'Office Lease',
-        renewalType: RenewalType.LEASE,
-        renewalDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // in 14 days
-        amount: 8500.00,
-        status: 'PENDING',
-      },
-      {
-        itemName: 'Insurance Policy',
-        renewalType: RenewalType.INSURANCE,
-        renewalDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // in 30 days
-        amount: 450.00,
-        status: 'PENDING',
-      }
+      { code: 'EXEMPT', name: 'Zero/Exempt Tax Rate', ratePercent: 0, isDefault: true },
+      { code: 'VAT', name: 'Value Added Tax (UK/EU)', ratePercent: 20, isDefault: false },
+      { code: 'GST', name: 'Goods & Services Tax (India)', ratePercent: 18, isDefault: false },
+      { code: 'US-TAX', name: 'State Services Tax', ratePercent: 8.25, isDefault: false },
     ]
   });
+  console.log('Tax configurations initialized.');
 
-  console.log('Database seeded successfully.');
+  // 4. Seed Standard Currencies
+  await prisma.currency.createMany({
+    data: [
+      { code: 'USD', name: 'US Dollar', symbol: '$', isDefault: true },
+      { code: 'EUR', name: 'Euro', symbol: '€', isDefault: false },
+      { code: 'GBP', name: 'British Pound', symbol: '£', isDefault: false },
+      { code: 'INR', name: 'Indian Rupee', symbol: '₹', isDefault: false },
+    ]
+  });
+  console.log('Currencies initialized.');
+
+  // 5. Seed Standard Payment Terms
+  await prisma.paymentTerm.createMany({
+    data: [
+      { name: 'Due on Receipt', daysDue: 0, isDefault: true },
+      { name: 'Net 15 Days', daysDue: 15, isDefault: false },
+      { name: 'Net 30 Days', daysDue: 30, isDefault: false },
+      { name: 'Net 60 Days', daysDue: 60, isDefault: false },
+    ]
+  });
+  console.log('Payment terms initialized.');
+
+  console.log('Database configuration seed complete.');
 }
 
 main()

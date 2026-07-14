@@ -241,7 +241,7 @@ export default function CompaniesPage() {
         
         {/* Central Grid workspace */}
         <div className="flex-1 overflow-y-auto p-6 h-full custom-scrollbar">
-          <div className="max-w-5xl mx-auto flex flex-col gap-stack-lg pb-12">
+          <div className="max-w-[1400px] mx-auto flex flex-col gap-stack-lg pb-12">
             
             {/* Header info */}
             <div className="flex justify-between items-center select-none">
@@ -525,7 +525,7 @@ export default function CompaniesPage() {
               {/* Dynamic Addresses List */}
               <section className="space-y-4 border-t border-outline-variant/60 pt-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-label-sm text-[10px] font-bold text-primary uppercase tracking-wider">Billing & Shipping Addresses</h3>
+                  <h3 className="font-label-sm text-[10px] font-bold text-primary uppercase tracking-wider">Billing & Office Addresses</h3>
                   <button type="button" onClick={addAddressField} className="text-[11px] text-primary font-bold flex items-center gap-0.5">
                     <span className="material-symbols-outlined text-[14px]">add_circle</span> Add Address
                   </button>
@@ -544,7 +544,7 @@ export default function CompaniesPage() {
                           className="h-8 border border-outline-variant rounded text-body-sm px-2 focus:ring-1 focus:ring-primary focus:outline-none text-on-surface"
                         >
                           <option value="BILLING">Billing Address</option>
-                          <option value="SHIPPING">Shipping Address</option>
+                          <option value="SHIPPING">Registered Office</option>
                         </select>
                       </div>
                       <div className="flex items-center gap-1.5 mt-5">

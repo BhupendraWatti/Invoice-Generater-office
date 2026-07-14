@@ -23,6 +23,10 @@ export default function RenewalsSpreadsheetPage() {
   const [newRowDate, setNewRowDate] = useState(new Date().toISOString().split('T')[0]);
   const [newRowAmount, setNewRowAmount] = useState(100);
   const [newRowVendor, setNewRowVendor] = useState('');
+  const [newRowEmail, setNewRowEmail] = useState('');
+  const [newRowPassword, setNewRowPassword] = useState('');
+  const [currency, setCurrency] = useState<'INR' | 'USD'>('INR');
+  const currencySymbol = currency === 'INR' ? '₹' : '$';
 
   const loadRenewals = async () => {
     setLoading(true);
@@ -98,12 +102,16 @@ export default function RenewalsSpreadsheetPage() {
         renewalDate: newRowDate,
         amount: newRowAmount,
         vendor: newRowVendor,
+        emailId: newRowEmail,
+        password: newRowPassword,
         status: 'PENDING',
         paymentStatus: 'UNPAID',
       });
       setRenewals([...renewals, created]);
       setNewRowName('');
       setNewRowVendor('');
+      setNewRowEmail('');
+      setNewRowPassword('');
       setAddingRow(false);
     } catch (err) {
       console.error('Failed to append renewal row:', err);
@@ -159,7 +167,7 @@ export default function RenewalsSpreadsheetPage() {
         
         {/* Central Workspace Content */}
         <div className="flex-1 overflow-y-auto p-6 h-full custom-scrollbar">
-          <div className="max-w-5xl mx-auto flex flex-col gap-5 pb-12">
+          <div className="max-w-[1400px] mx-auto flex flex-col gap-5 pb-12">
             
             {/* Header info */}
             <div className="flex justify-between items-center select-none">
@@ -170,7 +178,7 @@ export default function RenewalsSpreadsheetPage() {
               <div className="flex items-center gap-3">
                 <div className="bg-surface border border-outline-variant rounded-lg px-4 py-2.5 shadow-sm flex flex-col">
                   <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Unpaid Commitments</span>
-                  <span className="text-headline-sm font-bold text-error font-mono mt-0.5">${totalPendingAmount.toFixed(2)}</span>
+                  <span className="text-headline-sm font-bold text-error font-mono mt-0.5">{currencySymbol}{totalPendingAmount.toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -208,6 +216,16 @@ export default function RenewalsSpreadsheetPage() {
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+
+                {/* Currency select toggle */}
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as 'INR' | 'USD')}
+                  className="px-3 py-1 bg-surface border border-outline-variant/60 rounded-full text-[11px] font-bold text-primary focus:outline-none"
+                >
+                  <option value="INR">🇮🇳 INR (₹)</option>
+                  <option value="USD">🇺🇸 USD ($)</option>
+                </select>
               </div>
 
               {/* Add row template trigger */}
@@ -222,16 +240,16 @@ export default function RenewalsSpreadsheetPage() {
 
             {/* Slide Down Form to Add New Row */}
             {addingRow && (
-              <form onSubmit={handleAddNewRow} className="bg-surface border border-outline-variant rounded-lg p-4 shadow-md grid grid-cols-2 md:grid-cols-5 gap-3 text-body-sm animate-fade-in select-none">
+              <form onSubmit={handleAddNewRow} className="bg-surface border border-outline-variant rounded-lg p-4 shadow-md grid grid-cols-2 md:grid-cols-7 gap-3 text-body-sm animate-fade-in select-none">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Item Name</label>
+                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Website Name</label>
                   <input 
                     type="text" 
-                    placeholder="e.g. Hostinger SSL"
+                    placeholder="e.g. vyomhometutor.com"
                     value={newRowName}
                     onChange={(e) => setNewRowName(e.target.value)}
                     required
-                    className="px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none"
+                    className="px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[11px]"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -239,13 +257,33 @@ export default function RenewalsSpreadsheetPage() {
                   <select 
                     value={newRowType}
                     onChange={(e) => setNewRowType(e.target.value)}
-                    className="h-8 px-2 bg-surface-container-low border border-outline-variant rounded focus:outline-none"
+                    className="h-8 px-2 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[11px]"
                   >
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Due Date</label>
+                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Gmail Email ID</label>
+                  <input 
+                    type="email" 
+                    placeholder="name@gmail.com"
+                    value={newRowEmail}
+                    onChange={(e) => setNewRowEmail(e.target.value)}
+                    className="px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[11px]"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Password</label>
+                  <input 
+                    type="text" 
+                    placeholder="Access secret"
+                    value={newRowPassword}
+                    onChange={(e) => setNewRowPassword(e.target.value)}
+                    className="px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[11px] font-mono"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Renewal Date</label>
                   <input 
                     type="date"
                     value={newRowDate}
@@ -254,28 +292,28 @@ export default function RenewalsSpreadsheetPage() {
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Amount ($)</label>
+                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Amount ({currencySymbol})</label>
                   <input 
                     type="number"
                     value={newRowAmount}
                     onChange={(e) => setNewRowAmount(Number(e.target.value) || 0)}
                     required
-                    className="px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none font-mono"
+                    className="px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none font-mono text-[11px]"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Vendor Provider</label>
+                  <label className="text-[10px] text-on-surface-variant font-bold uppercase">Domain Company</label>
                   <input 
                     type="text" 
-                    placeholder="Hostinger Inc"
+                    placeholder="e.g. Hostinger"
                     value={newRowVendor}
                     onChange={(e) => setNewRowVendor(e.target.value)}
-                    className="px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none"
+                    className="px-2.5 py-1.5 bg-surface-container-low border border-outline-variant rounded focus:outline-none text-[11px]"
                   />
                 </div>
                 <button 
                   type="submit" 
-                  className="col-span-2 md:col-span-5 bg-primary text-on-primary py-1.5 rounded hover:bg-primary-fixed-variant transition-colors font-bold mt-2 shadow active:scale-95"
+                  className="col-span-2 md:col-span-7 bg-primary text-on-primary py-1.5 rounded hover:bg-primary-fixed-variant transition-colors font-bold mt-2 shadow active:scale-95 text-[11px]"
                 >
                   Save Renewal Row
                 </button>
@@ -322,13 +360,14 @@ export default function RenewalsSpreadsheetPage() {
                             className="rounded border-outline-variant text-primary focus:ring-primary h-3.5 w-3.5"
                           />
                         </th>
-                        <th className="p-2 w-[22%]">Item Contract Title</th>
-                        <th className="p-2 w-[14%]">Category</th>
-                        <th className="p-2 w-[14%]">Due Expiry</th>
-                        <th className="p-2 w-[12%] text-right">Amount</th>
-                        <th className="p-2 w-[14%]">Vendor</th>
-                        <th className="p-2 w-[12%] text-center">Payment</th>
-                        <th className="p-2 w-[8%] text-center">Status</th>
+                        <th className="p-2 w-[18%]">Website Name</th>
+                        <th className="p-2 w-[15%]">Gmail Email ID</th>
+                        <th className="p-2 w-[11%]">Renewal Date</th>
+                        <th className="p-2 w-[10%]">Password</th>
+                        <th className="p-2 w-[12%]">Domain Company</th>
+                        <th className="p-2 w-[10%] text-right">Amount</th>
+                        <th className="p-2 w-[10%] text-center">Payment</th>
+                        <th className="p-2 w-[10%] text-center">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/60 font-medium">
@@ -353,7 +392,7 @@ export default function RenewalsSpreadsheetPage() {
                               />
                             </td>
 
-                            {/* Item name cell */}
+                            {/* Item name (Website Name) cell */}
                             <td className="p-2 align-middle">
                               <input 
                                 type="text" 
@@ -362,46 +401,58 @@ export default function RenewalsSpreadsheetPage() {
                                 className="w-full bg-transparent focus:bg-surface-container-low border border-transparent hover:border-outline-variant/60 focus:border-primary rounded px-1.5 py-0.5 text-on-surface font-semibold focus:outline-none"
                               />
                             </td>
-
-                            {/* Category cell */}
+ 
+                            {/* Gmail email id cell */}
                             <td className="p-2 align-middle">
-                              <select 
-                                value={r.renewalType}
-                                onChange={(e) => handleCellChange(r.id, 'renewalType', e.target.value)}
+                              <input 
+                                type="text" 
+                                value={r.emailId || ''}
+                                onChange={(e) => handleCellChange(r.id, 'emailId', e.target.value)}
+                                placeholder="name@gmail.com"
                                 className="w-full bg-transparent focus:bg-surface-container-low border border-transparent hover:border-outline-variant/60 focus:border-primary rounded px-1.5 py-0.5 text-on-surface-variant focus:outline-none"
-                              >
-                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                              </select>
+                              />
                             </td>
-
+ 
                             {/* Due date cell */}
                             <td className="p-2 align-middle">
                               <input 
                                 type="date"
                                 value={new Date(r.renewalDate).toISOString().split('T')[0]}
                                 onChange={(e) => handleCellChange(r.id, 'renewalDate', e.target.value)}
+                                className="w-full bg-transparent focus:bg-surface-container-low border border-transparent hover:border-outline-variant/60 focus:border-primary rounded px-1.5 py-0.5 text-on-surface-variant font-mono focus:outline-none text-[10px]"
+                              />
+                            </td>
+
+                            {/* Password cell */}
+                            <td className="p-2 align-middle">
+                              <input 
+                                type="text" 
+                                value={r.password || ''}
+                                onChange={(e) => handleCellChange(r.id, 'password', e.target.value)}
+                                placeholder="Password"
                                 className="w-full bg-transparent focus:bg-surface-container-low border border-transparent hover:border-outline-variant/60 focus:border-primary rounded px-1.5 py-0.5 text-on-surface-variant font-mono focus:outline-none"
                               />
                             </td>
-
-                            {/* Amount cell */}
-                            <td className="p-2 text-right align-middle font-mono font-bold text-primary">
-                              <input 
-                                type="number" 
-                                value={r.amount}
-                                onChange={(e) => handleCellChange(r.id, 'amount', Number(e.target.value) || 0)}
-                                className="w-20 bg-transparent text-right focus:bg-surface-container-low border border-transparent hover:border-outline-variant/60 focus:border-primary rounded px-1.5 py-0.5 focus:outline-none text-[11px]"
-                              />
-                            </td>
-
-                            {/* Vendor cell */}
+ 
+                            {/* Domain Company (vendor) cell */}
                             <td className="p-2 align-middle">
                               <input 
                                 type="text" 
                                 value={r.vendor || ''}
                                 onChange={(e) => handleCellChange(r.id, 'vendor', e.target.value)}
-                                placeholder="Vendor Provider"
+                                placeholder="Hostinger / GoDaddy"
                                 className="w-full bg-transparent focus:bg-surface-container-low border border-transparent hover:border-outline-variant/60 focus:border-primary rounded px-1.5 py-0.5 text-on-surface-variant focus:outline-none"
+                              />
+                            </td>
+ 
+                            {/* Amount cell in Rupees/USD */}
+                            <td className="p-2 text-right align-middle font-mono font-bold text-primary flex items-center justify-end gap-0.5">
+                              <span>{currencySymbol}</span>
+                              <input 
+                                type="number" 
+                                value={r.amount}
+                                onChange={(e) => handleCellChange(r.id, 'amount', Number(e.target.value) || 0)}
+                                className="w-14 bg-transparent text-right focus:bg-surface-container-low border border-transparent hover:border-outline-variant/60 focus:border-primary rounded px-1 py-0.5 focus:outline-none text-[11px]"
                               />
                             </td>
 
