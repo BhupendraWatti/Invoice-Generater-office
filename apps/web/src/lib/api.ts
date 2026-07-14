@@ -624,17 +624,7 @@ export const api = {
       return 'http://localhost:3001/api/audit/export';
     },
   },
-  activities: {
-    list: async (limit = 10): Promise<any[]> => {
-      return request<any[]>(`/activities?limit=${limit}`);
-    },
-    create: async (data: { actionType: string; documentId?: string; details: string }): Promise<any> => {
-      return request<any>('/activities', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-    },
-  },
+
   templateEngine: {
     listDefinitions: async (): Promise<TemplateDefinitionDto[]> => {
       return request<TemplateDefinitionDto[]>('/template-engine/definitions');

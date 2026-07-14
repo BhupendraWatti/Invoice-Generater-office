@@ -1,57 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @plugin "@tailwindcss/forms";
 @plugin "@tailwindcss/container-queries";
 
 @theme {
-  /* Color Palette (Paper & Ink philosophy) */
-  --color-background: #f8f9fa;
-  --color-on-background: #191c1d;
+  /* Color Palette (Soft & Branded - Fluid Professional) */
+  --color-background: #fbf9f6; /* Bone background reduces eye strain */
+  --color-on-background: #475569; /* Slate Gray for high legibility body copy */
   
-  --color-primary: #3525cd;
-  --color-primary-container: #4f46e5;
+  --color-primary: #00acc1; /* Vibrant Teal from Granth logo */
+  --color-primary-container: #00acc1;
   --color-on-primary: #ffffff;
-  --color-on-primary-container: #dad7ff;
-  --color-primary-fixed-variant: #3323cc;
+  --color-on-primary-container: #e0f7fa;
+  --color-primary-fixed-variant: #0097a7; /* Darker teal for active/hover states */
   
-  --color-secondary: #575e70;
-  --color-secondary-container: #d9dff5;
+  --color-secondary: #0f172a; /* Deep Navy for primary text and high contrast elements */
+  --color-secondary-container: #e2e8f0;
   --color-on-secondary: #ffffff;
-  --color-on-secondary-container: #5c6274;
+  --color-on-secondary-container: #0f172a;
   
-  --color-tertiary: #7e3000;
-  --color-tertiary-container: #a44100;
+  --color-tertiary: #00838f;
+  --color-tertiary-container: #e0f2f1;
   --color-on-tertiary: #ffffff;
-  --color-on-tertiary-container: #ffd2be;
+  --color-on-tertiary-container: #004d40;
   
   --color-error: #ba1a1a;
   --color-error-container: #ffdad6;
   --color-on-error: #ffffff;
   --color-on-error-container: #93000a;
   
-  --color-outline: #777587;
-  --color-outline-variant: #c7c4d8;
+  --color-outline: #94a3b8;
+  --color-outline-variant: #dbdad7; /* Subtle light-gray border */
   
-  --color-surface: #f8f9fa;
-  --color-surface-dim: #d9dadb;
-  --color-surface-bright: #f8f9fa;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f3f4f5;
-  --color-surface-container: #edeeef;
-  --color-surface-container-high: #e7e8e9;
-  --color-surface-container-highest: #e1e3e4;
-  --color-on-surface: #191c1d;
-  --color-on-surface-variant: #464555;
+  --color-surface: #fbf9f6; /* Bone background for sidebars and panels */
+  --color-surface-dim: #f4f0ea;
+  --color-surface-bright: #fbf9f6;
+  --color-surface-container-lowest: #ffffff; /* White background for Central Workspace Canvas */
+  --color-surface-container-low: #f5f2eb;
+  --color-surface-container: #edeae2;
+  --color-surface-container-high: #e5e1d9;
+  --color-surface-container-highest: #dbd7ce;
+  --color-on-surface: #0f172a; /* Navy for primary headings */
+  --color-on-surface-variant: #475569; /* Slate Gray for secondary body copy */
   
-  --color-inverse-surface: #2e3132;
-  --color-inverse-on-surface: #f0f1f2;
+  --color-inverse-surface: #0f172a;
+  --color-inverse-on-surface: #fbf9f6;
 
-  /* Border Radii */
-  --radius-sm: 4px;
-  --radius-md: 8px;      /* Standard Button, Input, small Card */
-  --radius-lg: 12px;     /* Medium Containers */
-  --radius-xl: 16px;     /* Modals, Large Canvas items */
-  --radius-full: 9999px; /* Status tags, pills */
+  /* Border Radii (Smooth & Integrated) */
+  --radius-sm: 6px;
+  --radius-md: 12px;      /* Round Twelve - Standard Button, Input, small Card */
+  --radius-lg: 12px;      /* Round Twelve - Medium Containers */
+  --radius-xl: 16px;      /* Modals, Large Canvas items */
+  --radius-full: 9999px;  /* Pills, statuses */
 
   /* Spacing Grid (8px baseline) */
   --spacing-nav-rail-width: 64px;
@@ -63,19 +64,19 @@
   --spacing-stack-md: 16px;
   --spacing-stack-lg: 24px;
 
-  /* Typography Rules (Inter Font Stack) */
-  --font-sans: "Inter", sans-serif;
-  --font-display-sm: "Inter", sans-serif;
-  --font-headline-lg: "Inter", sans-serif;
-  --font-headline-md: "Inter", sans-serif;
-  --font-headline-sm: "Inter", sans-serif;
-  --font-body-lg: "Inter", sans-serif;
-  --font-body-md: "Inter", sans-serif;
-  --font-body-sm: "Inter", sans-serif;
-  --font-label-md: "Inter", sans-serif;
-  --font-label-sm: "Inter", sans-serif;
+  /* Typography Rules (Hanken Grotesk Font Stack) */
+  --font-sans: "Hanken Grotesk", sans-serif;
+  --font-display-sm: "Hanken Grotesk", sans-serif;
+  --font-headline-lg: "Hanken Grotesk", sans-serif;
+  --font-headline-md: "Hanken Grotesk", sans-serif;
+  --font-headline-sm: "Hanken Grotesk", sans-serif;
+  --font-body-lg: "Hanken Grotesk", sans-serif;
+  --font-body-md: "Hanken Grotesk", sans-serif;
+  --font-body-sm: "Hanken Grotesk", sans-serif;
+  --font-label-md: "Hanken Grotesk", sans-serif;
+  --font-label-sm: "Hanken Grotesk", sans-serif;
 
-  /* Font sizes — Tailwind v4 generates text-* utilities from the --text-* namespace */
+  /* Font sizes */
   --text-display-sm: 30px;
   --text-headline-lg: 24px;
   --text-headline-md: 20px;
@@ -85,6 +86,14 @@
   --text-body-sm: 13px;
   --text-label-md: 12px;
   --text-label-sm: 11px;
+
+  /* Elevation: Flat / Border-based, no heavy shadows */
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
 }
 
 /* Fix text clipping on all h-8 inputs and select elements */
@@ -92,3 +101,32 @@ input.h-8, select.h-8, .h-8 {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
 }
+
+/* ======================================================== */
+/* Tri-Pane layout styling & Modern flat borders */
+/* ======================================================== */
+
+/* Center Canvas: spacious, white-background area for focused work */
+main.flex > div.flex-1.overflow-y-auto,
+main.flex > div.flex-1.overflow-y-auto.custom-scrollbar {
+  background-color: #ffffff !important;
+  border-right: 1px solid var(--color-outline-variant) !important;
+}
+
+/* Ensure global layout elements match professional flat design */
+header {
+  border-bottom: 1px solid var(--color-outline-variant) !important;
+  background-color: var(--color-surface) !important;
+}
+
+nav {
+  border-right: 1px solid var(--color-outline-variant) !important;
+  background-color: var(--color-surface) !important;
+}
+
+aside {
+  border-left: 1px solid var(--color-outline-variant) !important;
+  background-color: var(--color-surface) !important;
+  box-shadow: none !important;
+}
+
