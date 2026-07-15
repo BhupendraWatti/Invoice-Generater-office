@@ -10,7 +10,8 @@ import {
   ProductDto,
   TaxConfigurationDto,
   UnitDto,
-  DocumentVersionDto
+  DocumentVersionDto,
+  normalizeColumnWidths
 } from '@docflow/shared-types';
 import Link from 'next/link';
 
@@ -1327,17 +1328,18 @@ export default function UniversalDocumentEditorPage({ params }: PageProps) {
 
                         <div className="overflow-x-auto">
                           {(() => {
-                            const sortedColumns = (activeTmpl?.table?.columns?.length
-                              ? [...activeTmpl.table.columns]
-                              : [
-                                { key: 'index', label: 'Sr. No', visible: true, width: 8, align: 'center', order: 0 },
-                                { key: 'description', label: 'Description', visible: true, width: 45, align: 'left', order: 1 },
-                                { key: 'type', label: 'Type', visible: fieldVisibility.showTableType, width: 20, align: 'left', order: 2 },
-                                { key: 'amount', label: 'Amount (₹)', visible: true, width: 15, align: 'right', order: 3 },
-                                { key: 'tax', label: 'Tax', visible: fieldVisibility.showTableTaxCode, width: 12, align: 'center', order: 4 }
-                              ])
-                              .filter(c => c.visible && c.key !== 'sku')
-                              .sort((a, b) => a.order - b.order);
+                            const sortedColumns = normalizeColumnWidths(
+                              (activeTmpl?.table?.columns?.length
+                                ? [...activeTmpl.table.columns]
+                                : [
+                                  { key: 'index', label: 'Sr. No', visible: true, width: 8, align: 'center', order: 0 },
+                                  { key: 'description', label: 'Description', visible: true, width: 45, align: 'left', order: 1 },
+                                  { key: 'type', label: 'Type', visible: fieldVisibility.showTableType, width: 20, align: 'left', order: 2 },
+                                  { key: 'amount', label: 'Amount (₹)', visible: true, width: 15, align: 'right', order: 3 },
+                                  { key: 'tax', label: 'Tax', visible: fieldVisibility.showTableTaxCode, width: 12, align: 'center', order: 4 }
+                                ])
+                                .filter(c => c.visible && c.key !== 'sku')
+                            ).sort((a, b) => a.order - b.order);
 
                             return (
                               <table className="w-full text-left border-collapse text-[11px] font-medium">

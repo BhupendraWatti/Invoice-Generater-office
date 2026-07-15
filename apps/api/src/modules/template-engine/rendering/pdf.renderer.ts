@@ -1,12 +1,11 @@
-import { InvoiceData, TemplateDefinitionDto } from '@docflow/shared-types';
-import { InvoiceRenderer, formatCurrency, formatDate, replaceTokens } from './renderer.interface';
+import { InvoiceData, TemplateDefinitionDto, buildRenderModel, SharedRenderModel } from '@docflow/shared-types';
+import { InvoiceRenderer } from './renderer.interface';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PDFDocument = require('pdfkit') as typeof import('pdfkit');
 
 interface RenderContext {
   doc: any;
-  data: InvoiceData;
-  template: TemplateDefinitionDto;
+  model: SharedRenderModel;
   leftMargin: number;
   rightMargin: number;
   topMargin: number;
@@ -20,9 +19,11 @@ interface RenderContext {
   leftColWidth: number;
   rightColStartX: number;
   rightColWidth: number;
-  // amountCol is resolved at table-render time from template columns
-  amountColX: number;
-  amountColWidth: number;
+  // Totals block anchor: always right half of page, independent of column positions
+  totalsStartX: number;
+  totalsWidth: number;
+
+  // Signature area
   sigStartX: number;
   sigWidth: number;
   sigImageStartX: number;
@@ -41,8 +42,10 @@ export class PdfRenderer implements InvoiceRenderer {
   render(data: InvoiceData, template: TemplateDefinitionDto): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
+        const model = buildRenderModel(data, template);
+
         const doc = new PDFDocument({
-          size: template.page.size === 'LETTER' ? 'LETTER' : 'A4',
+          size: model.theme.pageSize === 'LETTER' ? 'LETTER' : 'A4',
           margins: {
             top: template.page.margins.top,
             bottom: template.page.margins.bottom,
@@ -67,12 +70,15 @@ export class PdfRenderer implements InvoiceRenderer {
 
         const usableBottom = doc.page.height - bottomMargin - (template.footer.show ? 24 : 0);
 
-        const { primary: primaryColor, text: textColor, muted: mutedColor, border: borderColor, tableHeaderBg: headerBgColor, tableHeaderText: headerTextColor, zebraBg: zebraBgColor } = template.theme.colors;
+        const { primary: primaryColor, text: textColor, muted: mutedColor, border: borderColor, tableHeaderBg: headerBgColor, tableHeaderText: headerTextColor, zebraBg: zebraBgColor } = model.theme.colors;
+
+        // Totals anchor: right 45% of content width, always stable regardless of column layout
+        const totalsStartX = leftMargin + contentWidth * 0.55;
+        const totalsWidth = contentWidth * 0.45;
 
         const ctx: RenderContext = {
           doc,
-          data,
-          template,
+          model,
           leftMargin,
           rightMargin,
           topMargin,
@@ -85,9 +91,10 @@ export class PdfRenderer implements InvoiceRenderer {
           leftColWidth: contentWidth * 0.5,
           rightColStartX: leftMargin + contentWidth * 0.55,
           rightColWidth: contentWidth * 0.45,
-          // Will be set during drawItemsTable from the amount/last column
-          amountColX: leftMargin + contentWidth * 0.52,
-          amountColWidth: contentWidth * 0.48,
+
+          totalsStartX,
+          totalsWidth,
+
           sigStartX: leftMargin + contentWidth * 0.62,
           sigWidth: contentWidth * 0.38,
           sigImageStartX: leftMargin + contentWidth * 0.7,
@@ -102,15 +109,15 @@ export class PdfRenderer implements InvoiceRenderer {
         };
 
         const drawPageBackground = () => {
-          if (template.watermark.enabled && template.watermark.text) {
+          if (model.watermark.enabled && model.watermark.text) {
             doc.save();
-            doc.opacity(template.watermark.opacity);
+            doc.opacity(model.watermark.opacity);
             doc.fillColor(mutedColor);
             doc.fontSize(48);
-            doc.font(template.theme.fonts.heading);
+            doc.font(model.theme.fonts.heading);
             doc.translate(pageWidth / 2, doc.page.height / 2);
-            doc.rotate(-template.watermark.angle);
-            doc.text(template.watermark.text, -200, -24, { width: 400, align: 'center' });
+            doc.rotate(-model.watermark.angle);
+            doc.text(model.watermark.text, -200, -24, { width: 400, align: 'center' });
             doc.restore();
           }
         };
@@ -121,7 +128,8 @@ export class PdfRenderer implements InvoiceRenderer {
         // Core rendering sequence
         this.drawHeader(ctx);
         this.drawItemsTable(ctx);
-        this.drawNotesAndTotals(ctx);
+        this.drawTotals(ctx);
+        this.drawNotes(ctx);
         this.drawFooterBlocks(ctx);
         this.drawSignature(ctx);
         this.drawFooter(ctx);
@@ -145,172 +153,151 @@ export class PdfRenderer implements InvoiceRenderer {
 
     // LEFT COLUMN: Logo + Bill To
     const logoHeight = 50;
-    if (ctx.template.logo.enabled && ctx.data.logoUrl) {
-      const logoAlign = ctx.template.logo.position || 'left';
+    if (ctx.model.logo.enabled && ctx.model.logo.url) {
+      const logoAlign = ctx.model.logo.position || 'left';
       const logoX = logoAlign === 'right'
-        ? ctx.leftMargin + ctx.contentWidth * 0.5 - ctx.template.logo.maxWidth
+        ? ctx.leftMargin + ctx.contentWidth * 0.5 - ctx.model.logo.maxWidth
         : logoAlign === 'center'
-          ? ctx.leftMargin + (ctx.contentWidth * 0.5 - ctx.template.logo.maxWidth) / 2
+          ? ctx.leftMargin + (ctx.contentWidth * 0.5 - ctx.model.logo.maxWidth) / 2
           : ctx.leftMargin;
-      this.drawBase64Image(ctx, ctx.data.logoUrl, logoX, leftY, { fit: [ctx.template.logo.maxWidth, logoHeight] });
+      this.drawBase64Image(ctx, ctx.model.logo.url, logoX, leftY, { fit: [ctx.model.logo.maxWidth, logoHeight] });
       leftY += logoHeight + SPACING.sm;
     }
 
-    if (ctx.template.customer.showBillTo) {
+    if (ctx.model.customer.showBillTo) {
       leftY += SPACING.md;
       
-      ctx.doc.font(ctx.template.theme.fonts.heading).fillColor(ctx.primaryColor).fontSize(ctx.template.theme.baseFontSize - 1);
-      const billToHeading = ctx.template.customer.billToHeading.toUpperCase();
+      ctx.doc.font(ctx.model.theme.fonts.heading).fillColor(ctx.primaryColor).fontSize(ctx.model.theme.baseFontSize - 1);
+      const billToHeading = ctx.model.customer.heading.toUpperCase();
       ctx.doc.text(billToHeading, ctx.leftMargin, leftY, { width: ctx.leftColWidth });
       leftY += ctx.doc.heightOfString(billToHeading, { width: ctx.leftColWidth }) + SPACING.sm;
 
-      ctx.doc.fillColor(ctx.textColor).fontSize(ctx.template.theme.baseFontSize);
-      if (ctx.data.billTo.name) {
-        ctx.doc.font(ctx.template.theme.fonts.heading);
-        ctx.doc.text(ctx.data.billTo.name, ctx.leftMargin, leftY, { width: ctx.leftColWidth });
-        leftY += ctx.doc.heightOfString(ctx.data.billTo.name, { width: ctx.leftColWidth }) + SPACING.sm;
+      ctx.doc.fillColor(ctx.textColor).fontSize(ctx.model.theme.baseFontSize);
+      if (ctx.model.customer.name) {
+        ctx.doc.font(ctx.model.theme.fonts.heading);
+        ctx.doc.text(ctx.model.customer.name, ctx.leftMargin, leftY, { width: ctx.leftColWidth });
+        leftY += ctx.doc.heightOfString(ctx.model.customer.name, { width: ctx.leftColWidth }) + SPACING.sm;
       }
 
-      ctx.doc.font(ctx.template.theme.fonts.body).fillColor(ctx.mutedColor).fontSize(ctx.template.theme.baseFontSize - 1);
-      ctx.data.billTo.lines.forEach(line => {
+      ctx.doc.font(ctx.model.theme.fonts.body).fillColor(ctx.mutedColor).fontSize(ctx.model.theme.baseFontSize - 1);
+      ctx.model.customer.lines.forEach(line => {
         ctx.doc.text(line, ctx.leftMargin, leftY, { width: ctx.leftColWidth });
         leftY += ctx.doc.heightOfString(line, { width: ctx.leftColWidth });
       });
-      if (ctx.data.billTo.phone) {
-        ctx.doc.text(ctx.data.billTo.phone, ctx.leftMargin, leftY, { width: ctx.leftColWidth });
-        leftY += ctx.doc.heightOfString(ctx.data.billTo.phone, { width: ctx.leftColWidth });
-      }
-      if (ctx.data.billTo.email) {
-        ctx.doc.text(ctx.data.billTo.email, ctx.leftMargin, leftY, { width: ctx.leftColWidth });
-        leftY += ctx.doc.heightOfString(ctx.data.billTo.email, { width: ctx.leftColWidth });
-      }
-      if (ctx.data.billTo.taxId) {
-        ctx.doc.font(ctx.template.theme.fonts.heading);
-        ctx.doc.text(ctx.data.billTo.taxId, ctx.leftMargin, leftY, { width: ctx.leftColWidth });
-        leftY += ctx.doc.heightOfString(ctx.data.billTo.taxId, { width: ctx.leftColWidth });
-      }
+      ctx.model.customer.fields.forEach(field => {
+        if (field.value) {
+          ctx.doc.text(field.value, ctx.leftMargin, leftY, { width: ctx.leftColWidth });
+          leftY += ctx.doc.heightOfString(field.value, { width: ctx.leftColWidth });
+        }
+      });
     }
 
     // RIGHT COLUMN: Title + Company Info
-    if (ctx.template.header.showTitle) {
-      const titleText = replaceTokens(ctx.template.header.titleText, ctx.data).toUpperCase();
-      ctx.doc.fillColor(ctx.primaryColor).font(ctx.template.theme.fonts.heading).fontSize(ctx.template.theme.baseFontSize + 12);
+    if (ctx.model.header.showTitle) {
+      const titleText = ctx.model.header.titleText.toUpperCase();
+      ctx.doc.fillColor(ctx.primaryColor).font(ctx.model.theme.fonts.heading).fontSize(ctx.model.theme.baseFontSize + 12);
       ctx.doc.text(titleText, ctx.rightColStartX, rightY, { width: ctx.rightColWidth, align: 'right' });
       rightY += ctx.doc.heightOfString(titleText, { width: ctx.rightColWidth, align: 'right' }) + SPACING.xs;
 
-      if (ctx.template.header.accentBar) {
+      if (ctx.model.header.accentBar) {
         ctx.doc.strokeColor(ctx.primaryColor).lineWidth(1.5).moveTo(ctx.rightColStartX, rightY).lineTo(ctx.leftMargin + ctx.contentWidth, rightY).stroke();
         rightY += SPACING.sm;
       }
     }
 
-    if (ctx.template.documentDetails.show) {
-      const sortedMetaFields = [...ctx.template.documentDetails.fields].sort((a, b) => a.order - b.order);
-      sortedMetaFields.forEach(f => {
-        if (!f.visible) return;
-        let valText = '';
-        if (f.key === 'number') valText = ctx.data.documentNumber;
-        else if (f.key === 'date') valText = formatDate(ctx.data.issueDate);
-        else if (f.key === 'dueDate' && ctx.data.dueDate) valText = formatDate(ctx.data.dueDate);
-        else if (f.key === 'terms') valText = 'Due on Receipt';
-
-        if (valText) {
-          rightY += this.drawMetadataRow(ctx, `${f.label}: `, valText, rightY) + SPACING.xs;
-        }
-      });
-    }
+    // Fixed two-column layout for document details:
+    // Label column is fixed at 80pt; value is right-aligned to the right edge.
+    const META_LABEL_WIDTH = 80;
+    const META_VALUE_X = ctx.rightColStartX + ctx.rightColWidth - META_LABEL_WIDTH;
+    ctx.model.metadata.fields.forEach(f => {
+      rightY += this.drawMetadataRow(ctx, f.label, f.value, rightY, META_LABEL_WIDTH, META_VALUE_X) + SPACING.xs;
+    });
 
     rightY += SPACING.sm;
-    ctx.doc.font(ctx.template.theme.fonts.heading).fillColor(ctx.textColor).fontSize(ctx.template.theme.baseFontSize);
-    ctx.doc.text(ctx.data.organization.name, ctx.rightColStartX, rightY, { width: ctx.rightColWidth, align: 'right' });
-    rightY += ctx.doc.heightOfString(ctx.data.organization.name, { width: ctx.rightColWidth, align: 'right' }) + SPACING.xs;
+    ctx.doc.font(ctx.model.theme.fonts.heading).fillColor(ctx.textColor).fontSize(ctx.model.theme.baseFontSize);
+    ctx.doc.text(ctx.model.company.name, ctx.rightColStartX, rightY, { width: ctx.rightColWidth, align: 'right' });
+    rightY += ctx.doc.heightOfString(ctx.model.company.name, { width: ctx.rightColWidth, align: 'right' }) + SPACING.xs;
 
-    ctx.doc.font(ctx.template.theme.fonts.body).fillColor(ctx.mutedColor).fontSize(ctx.template.theme.baseFontSize - 1);
-    ctx.data.organization.lines.forEach(line => {
+    ctx.doc.font(ctx.model.theme.fonts.body).fillColor(ctx.mutedColor).fontSize(ctx.model.theme.baseFontSize - 1);
+    ctx.model.company.lines.forEach(line => {
       ctx.doc.text(line, ctx.rightColStartX, rightY, { width: ctx.rightColWidth, align: 'right' });
       rightY += ctx.doc.heightOfString(line, { width: ctx.rightColWidth, align: 'right' });
     });
 
-    [
-      ctx.data.organization.email ? `Email: ${ctx.data.organization.email}` : null,
-      ctx.data.organization.website ? `Website: ${ctx.data.organization.website}` : null,
-      ctx.data.organization.phone ? `Phone: ${ctx.data.organization.phone}` : null,
-      ctx.data.organization.taxId ? `GSTIN/VAT: ${ctx.data.organization.taxId}` : null,
-      ctx.data.organization.cin ? `CIN: ${ctx.data.organization.cin}` : null,
-      ctx.data.organization.pan ? `PAN: ${ctx.data.organization.pan}` : null,
-    ]
-      .filter(Boolean)
-      .forEach(detail => {
-        const txt = detail as string;
-        ctx.doc.text(txt, ctx.rightColStartX, rightY, { width: ctx.rightColWidth, align: 'right' });
-        rightY += ctx.doc.heightOfString(txt, { width: ctx.rightColWidth, align: 'right' });
-      });
+    ctx.model.company.fields.forEach(field => {
+      if (field.value) {
+        const labelMapping: Record<string, string> = {
+          email: 'Email: ',
+          website: 'Website: ',
+          phone: 'Phone: ',
+          taxId: 'GSTIN/VAT: ',
+          cin: 'CIN: ',
+          pan: 'PAN: '
+        };
+        const prefix = labelMapping[field.key] || `${field.label}: `;
+        const fullTxt = `${prefix}${field.value}`;
+        ctx.doc.text(fullTxt, ctx.rightColStartX, rightY, { width: ctx.rightColWidth, align: 'right' });
+        rightY += ctx.doc.heightOfString(fullTxt, { width: ctx.rightColWidth, align: 'right' });
+      }
+    });
 
     ctx.y = Math.max(leftY, rightY) + SPACING.xl;
   }
 
   private drawItemsTable(ctx: RenderContext) {
+    // Inner cell horizontal padding to prevent text collision between adjacent columns
+    const CELL_PAD_H = 3;
     const CELL_PAD_V = 4; // vertical padding inside a row (top + bottom combined)
-    const tableHeaderHeight = 18;
+    const tableHeaderHeight = 20;
 
-    const sortedColumns = [...ctx.template.table.columns]
-      .filter(c => c.visible)
-      .sort((a, b) => a.order - b.order);
-
-    // Build column geometry from template — no padding offsets, no overrides.
-    // colX is the left edge of each column cell; cellWidth is the full template width.
+    // Build column geometry from model — columns are pre-normalized and sorted by buildRenderModel
     const preparedColumns = (() => {
       let x = ctx.leftMargin;
-      return sortedColumns.map(col => {
-        const cellWidth = ((col.width || 10) / 100) * ctx.contentWidth;
-        const align = (col.align === 'right' ? 'right' : col.align === 'center' ? 'center' : 'left') as 'left' | 'center' | 'right' | 'justify';
+      return ctx.model.table.columns.map(col => {
+        const fullWidth = (col.width / 100) * ctx.contentWidth;
         const colX = x;
-        x += cellWidth;
-        return { ...col, cellWidth, align, colX };
+        x += fullWidth;
+        // Inner text render area: shrink by horizontal padding on each side
+        const textX = colX + CELL_PAD_H;
+        const textWidth = fullWidth - CELL_PAD_H * 2;
+        const align = col.align as 'left' | 'center' | 'right' | 'justify';
+        return { ...col, fullWidth, colX, textX, textWidth, align };
       });
     })();
-
-    // Anchor totals to the rightmost visible column (amount or last column).
-    // This makes the totals block track the Amount column width/position exactly.
-    const amountCol = preparedColumns.find(c => c.key === 'amount') ?? preparedColumns[preparedColumns.length - 1];
-    if (amountCol) {
-      ctx.amountColX = amountCol.colX;
-      ctx.amountColWidth = amountCol.cellWidth;
-    }
 
     const drawTableHeader = (headerY: number) => {
       ctx.doc.fillColor(ctx.headerBgColor);
       ctx.doc.rect(ctx.leftMargin, headerY, ctx.contentWidth, tableHeaderHeight).fill();
-      ctx.doc.fillColor(ctx.headerTextColor).font(ctx.template.theme.fonts.heading).fontSize(ctx.template.theme.baseFontSize - 1);
+      ctx.doc.fillColor(ctx.headerTextColor).font(ctx.model.theme.fonts.heading).fontSize(ctx.model.theme.baseFontSize - 1);
 
       preparedColumns.forEach(col => {
-        const textH = ctx.doc.heightOfString(col.label.toUpperCase(), { width: col.cellWidth });
+        const textH = ctx.doc.heightOfString(col.label.toUpperCase(), { width: col.textWidth });
         const textY = headerY + (tableHeaderHeight - textH) / 2;
-        ctx.doc.text(col.label.toUpperCase(), col.colX, textY, { width: col.cellWidth, align: col.align });
+        ctx.doc.text(col.label.toUpperCase(), col.textX, textY, { width: col.textWidth, align: col.align, lineBreak: false });
       });
     };
 
     drawTableHeader(ctx.y);
     ctx.y += tableHeaderHeight;
 
-    ctx.doc.font(ctx.template.theme.fonts.body).fontSize(ctx.template.theme.baseFontSize - 1);
+    ctx.doc.font(ctx.model.theme.fonts.body).fontSize(ctx.model.theme.baseFontSize - 1);
 
-    ctx.data.items.forEach((item, rIdx) => {
-      const isZebra = ctx.template.table.zebra && rIdx % 2 === 1;
+    ctx.model.table.rows.forEach((row, rIdx) => {
+      const isZebra = ctx.model.table.zebra && rIdx % 2 === 1;
 
-      // Dynamic row height: measure each cell using the exact template column width.
-      ctx.doc.font(ctx.template.theme.fonts.body).fontSize(ctx.template.theme.baseFontSize - 1);
-      let rowHeight = CELL_PAD_V * 2;
+      // Dynamic row height: measure each cell text
+      ctx.doc.font(ctx.model.theme.fonts.body).fontSize(ctx.model.theme.baseFontSize - 1);
+      let rowHeight = CELL_PAD_V * 2 + ctx.doc.currentLineHeight(true);
       preparedColumns.forEach(col => {
-        const txt = this.getCellText(ctx.data, item, col.key);
-        const cellH = ctx.doc.heightOfString(txt, { width: col.cellWidth }) + CELL_PAD_V * 2;
+        const txt = row.cells[col.key] || '';
+        const cellH = ctx.doc.heightOfString(txt, { width: col.textWidth }) + CELL_PAD_V * 2;
         if (cellH > rowHeight) rowHeight = cellH;
       });
 
       this.ensurePageSpace(ctx, rowHeight, () => {
         drawTableHeader(ctx.y);
         ctx.y += tableHeaderHeight;
-        ctx.doc.font(ctx.template.theme.fonts.body).fontSize(ctx.template.theme.baseFontSize - 1);
+        ctx.doc.font(ctx.model.theme.fonts.body).fontSize(ctx.model.theme.baseFontSize - 1);
       });
 
       if (isZebra) {
@@ -318,226 +305,207 @@ export class PdfRenderer implements InvoiceRenderer {
         ctx.doc.rect(ctx.leftMargin, ctx.y, ctx.contentWidth, rowHeight).fill();
       }
 
-      // Render each cell: start at colX (template position), full cellWidth, template align.
       ctx.doc.fillColor(ctx.textColor);
       preparedColumns.forEach(col => {
-        const txt = this.getCellText(ctx.data, item, col.key);
-        const textH = ctx.doc.heightOfString(txt, { width: col.cellWidth });
-        // Vertically center within the row
+        const txt = row.cells[col.key] || '';
+        const textH = ctx.doc.heightOfString(txt, { width: col.textWidth });
         const textY = ctx.y + (rowHeight - textH) / 2;
-        ctx.doc.text(txt, col.colX, textY, { width: col.cellWidth, align: col.align });
+        // Render text within padded cell area to prevent clipping/overflow into adjacent columns
+        ctx.doc.text(txt, col.textX, textY, { width: col.textWidth, align: col.align });
       });
 
-      if (ctx.template.table.showBorders) {
+      if (ctx.model.table.showBorders) {
         ctx.doc.strokeColor(ctx.borderColor).lineWidth(0.5)
-          .moveTo(ctx.leftMargin, ctx.y).lineTo(ctx.leftMargin + ctx.contentWidth, ctx.y).stroke();
+          .moveTo(ctx.leftMargin, ctx.y + rowHeight).lineTo(ctx.leftMargin + ctx.contentWidth, ctx.y + rowHeight).stroke();
       }
 
       ctx.y += rowHeight;
     });
 
-    if (ctx.template.table.showBorders) {
+    if (ctx.model.table.showBorders) {
       ctx.doc.strokeColor(ctx.borderColor).lineWidth(1)
         .moveTo(ctx.leftMargin, ctx.y).lineTo(ctx.leftMargin + ctx.contentWidth, ctx.y).stroke();
     }
 
-    ctx.y += 16; // SPACING.lg
+    ctx.y += 16; // gap before totals
   }
 
-  private drawNotesAndTotals(ctx: RenderContext) {
-    const SPACING = { xs: 4, sm: 8, md: 12, xl: 20 };
-    const totalsRows = [...ctx.template.totals.rows]
-      .filter(r => r.visible)
-      .sort((a, b) => a.order - b.order);
+  /**
+   * Renders the Totals block. Always anchored to the right 45% of the page,
+   * independent of column layout. Dynamically renders from model.totals.rows
+   * respecting visibility, order, labels and emphasis styling.
+   */
+  private drawTotals(ctx: RenderContext) {
+    const SPACING = { xs: 4, sm: 8, md: 12 };
+    const totalsRows = ctx.model.totals.rows;
+    if (totalsRows.length === 0) return;
 
-    const notesText = (ctx.data.notes || ctx.template.notes.text || '').trim();
-    const showNotes = ctx.template.notes.show && !!notesText;
-
-    // ---- Measure totals height ----
+    // Measure total height needed
     let totalsHeight = 0;
     totalsRows.forEach(row => {
-      const val = this.getRowValue(ctx.data, row.key);
-      const formattedVal = formatCurrency(val, ctx.data.currencySymbol);
-      const labelText = `${row.label}: `;
-      const fontSize = row.emphasis ? ctx.template.theme.baseFontSize + 1 : ctx.template.theme.baseFontSize - 1;
-      ctx.doc.font(row.emphasis ? ctx.template.theme.fonts.heading : ctx.template.theme.fonts.body).fontSize(fontSize);
-      const labelW = ctx.doc.widthOfString(labelText);
-      const valueW = ctx.doc.widthOfString(formattedVal);
-      const rowTextH = Math.max(
-        ctx.doc.heightOfString(labelText, { width: labelW }),
-        ctx.doc.heightOfString(formattedVal, { width: valueW })
-      );
+      const fontSize = row.emphasis ? ctx.model.theme.baseFontSize + 1 : ctx.model.theme.baseFontSize - 1;
+      ctx.doc.font(row.emphasis ? ctx.model.theme.fonts.heading : ctx.model.theme.fonts.body).fontSize(fontSize);
+      const rowH = ctx.doc.currentLineHeight(true);
       if (row.emphasis) {
-        totalsHeight += rowTextH + SPACING.xs * 2 + SPACING.xs; // banner padding + gap
+        totalsHeight += rowH + 6 + SPACING.xs; // banner: 3px padding top+bottom + gap
       } else {
-        totalsHeight += rowTextH + SPACING.xs;
+        totalsHeight += rowH + SPACING.xs;
       }
     });
 
-    this.ensurePageSpace(ctx, totalsHeight);
+    this.ensurePageSpace(ctx, totalsHeight + SPACING.sm);
 
-    // ---- Render totals (right-aligned block) ----
     let totalsY = ctx.y;
     totalsRows.forEach(row => {
-      const val = this.getRowValue(ctx.data, row.key);
-      const formattedVal = formatCurrency(val, ctx.data.currencySymbol);
-      totalsY += this.drawTotalsRow(ctx, `${row.label}: `, formattedVal, totalsY, row.emphasis) + SPACING.xs;
+      const rowH = this.drawTotalsRow(ctx, `${row.label}: `, row.value, totalsY, row.emphasis);
+      totalsY += rowH + SPACING.xs;
     });
 
     ctx.y = totalsY + SPACING.md;
+  }
 
-    // ---- Render notes BELOW totals as full-width block ----
-    if (showNotes) {
-      ctx.doc.font(ctx.template.theme.fonts.heading).fontSize(ctx.template.theme.baseFontSize - 1);
-      const headingH = ctx.doc.heightOfString((ctx.template.notes.heading || 'Notes').toUpperCase(), { width: ctx.contentWidth });
-      ctx.doc.font(ctx.template.theme.fonts.body).fontSize(ctx.template.theme.baseFontSize - 1);
-      const textH = ctx.doc.heightOfString(notesText, { width: ctx.contentWidth - SPACING.sm * 2 });
-      const notesHeight = headingH + textH + SPACING.sm * 2 + SPACING.xs;
+  /**
+   * Renders Notes below the Totals block as a full-width banner.
+   */
+  private drawNotes(ctx: RenderContext) {
+    const SPACING = { xs: 4, sm: 8, md: 12 };
+    const notesText = ctx.model.notes.text;
+    if (!ctx.model.notes.show || !notesText) return;
 
-      this.ensurePageSpace(ctx, notesHeight);
+    ctx.doc.font(ctx.model.theme.fonts.heading).fontSize(ctx.model.theme.baseFontSize - 1);
+    const headingH = ctx.doc.heightOfString(ctx.model.notes.heading.toUpperCase(), { width: ctx.contentWidth });
+    ctx.doc.font(ctx.model.theme.fonts.body).fontSize(ctx.model.theme.baseFontSize - 1);
+    const textH = ctx.doc.heightOfString(notesText, { width: ctx.contentWidth - SPACING.sm * 2 });
+    const notesHeight = headingH + textH + SPACING.sm * 2 + SPACING.xs;
 
-      ctx.doc.fillColor(ctx.template.theme.colors.border || '#F3F4F6');
-      ctx.doc.roundedRect(ctx.leftMargin, ctx.y, ctx.contentWidth, notesHeight, 3).fill();
+    this.ensurePageSpace(ctx, notesHeight);
 
-      ctx.doc.font(ctx.template.theme.fonts.heading).fillColor(ctx.primaryColor).fontSize(ctx.template.theme.baseFontSize - 1);
-      const notesHeading = (ctx.template.notes.heading || 'Notes').toUpperCase();
-      ctx.doc.text(notesHeading, ctx.leftMargin + SPACING.sm, ctx.y + SPACING.sm, { width: ctx.contentWidth - SPACING.sm * 2 });
+    ctx.doc.fillColor(ctx.model.theme.colors.zebraBg || '#F3F4F6');
+    ctx.doc.roundedRect(ctx.leftMargin, ctx.y, ctx.contentWidth, notesHeight, 3).fill();
 
-      ctx.doc.font(ctx.template.theme.fonts.body).fillColor(ctx.textColor).fontSize(ctx.template.theme.baseFontSize - 1);
-      ctx.doc.text(notesText, ctx.leftMargin + SPACING.sm, ctx.y + SPACING.sm + headingH + SPACING.xs, { width: ctx.contentWidth - SPACING.sm * 2 });
+    ctx.doc.font(ctx.model.theme.fonts.heading).fillColor(ctx.primaryColor).fontSize(ctx.model.theme.baseFontSize - 1);
+    const notesHeading = ctx.model.notes.heading.toUpperCase();
+    ctx.doc.text(notesHeading, ctx.leftMargin + SPACING.sm, ctx.y + SPACING.sm, { width: ctx.contentWidth - SPACING.sm * 2 });
 
-      ctx.y += notesHeight + SPACING.md;
-    }
+    ctx.doc.font(ctx.model.theme.fonts.body).fillColor(ctx.textColor).fontSize(ctx.model.theme.baseFontSize - 1);
+    ctx.doc.text(notesText, ctx.leftMargin + SPACING.sm, ctx.y + SPACING.sm + headingH + SPACING.xs, { width: ctx.contentWidth - SPACING.sm * 2 });
 
-    ctx.y += SPACING.sm;
+    ctx.y += notesHeight + SPACING.md;
   }
 
   private drawFooterBlocks(ctx: RenderContext) {
     const SPACING = { xs: 4, sm: 8, md: 12 };
-    const footerBlocks = ctx.template.footerBlocks || [
-      { key: 'payment', label: 'Payment Instructions', visible: ctx.template.payment.show, order: 0 },
-      { key: 'bank', label: 'Bank Details', visible: ctx.template.bank.show, order: 1 },
-      { key: 'qr', label: 'QR Code', visible: true, order: 2 },
-      { key: 'signature', label: 'Signature', visible: ctx.template.signature.show, order: 3 },
-    ];
+    const blocks = ctx.model.footerBlocks.filter(b => b.key !== 'signature' && b.key !== 'footer');
 
-    const sortedBankFields = ctx.template.bank.show && ctx.data.bank
-      ? [...ctx.template.bank.fields].sort((a, b) => a.order - b.order)
-      : [];
+    blocks.forEach(block => {
+      if (block.key === 'payment' && block.data.show && block.data.instructions) {
+        const blockHeight = this.getPaymentBlockHeight(ctx);
+        this.ensurePageSpace(ctx, blockHeight);
 
-    [...footerBlocks]
-      .filter(b => b.key !== 'signature')
-      .sort((a, b) => a.order - b.order)
-      .forEach(block => {
-        if (!block.visible) return;
+        ctx.doc.font(ctx.model.theme.fonts.heading).fillColor(ctx.primaryColor).fontSize(ctx.model.theme.baseFontSize);
+        const headingText = block.data.heading.toUpperCase();
+        ctx.doc.text(headingText, ctx.leftMargin, ctx.y, { width: ctx.contentWidth });
+        ctx.y += ctx.doc.heightOfString(headingText, { width: ctx.contentWidth }) + SPACING.sm;
 
-        if (block.key === 'payment' && ctx.template.payment.show && ctx.template.payment.instructions) {
-          const blockHeight = this.getPaymentBlockHeight(ctx);
-          this.ensurePageSpace(ctx, blockHeight);
+        ctx.doc.font(ctx.model.theme.fonts.body).fillColor(ctx.mutedColor).fontSize(ctx.model.theme.baseFontSize - 1);
+        const instrText = block.data.instructions || '';
+        ctx.doc.text(instrText, ctx.leftMargin, ctx.y, { width: ctx.contentWidth });
+        ctx.y += ctx.doc.heightOfString(instrText, { width: ctx.contentWidth }) + SPACING.md;
+      }
 
-          ctx.doc.font(ctx.template.theme.fonts.heading).fillColor(ctx.primaryColor);
-          const headingText = (ctx.template.payment.heading || 'Payment Instructions').toUpperCase();
-          ctx.doc.text(headingText, ctx.leftMargin, ctx.y, { width: ctx.contentWidth });
-          ctx.y += ctx.doc.heightOfString(headingText, { width: ctx.contentWidth }) + SPACING.sm;
+      if (block.key === 'bank' && block.data.show && block.data.fields && block.data.fields.length > 0) {
+        const blockHeight = this.getBankBlockHeight(ctx, block.data.fields);
+        this.ensurePageSpace(ctx, blockHeight);
 
-          ctx.doc.font(ctx.template.theme.fonts.body).fillColor(ctx.mutedColor).fontSize(ctx.template.theme.baseFontSize - 1);
-          const instrText = ctx.template.payment.instructions || '';
-          ctx.doc.text(instrText, ctx.leftMargin, ctx.y, { width: ctx.contentWidth });
-          ctx.y += ctx.doc.heightOfString(instrText, { width: ctx.contentWidth }) + SPACING.md;
-        }
+        ctx.doc.font(ctx.model.theme.fonts.heading).fillColor(ctx.primaryColor).fontSize(ctx.model.theme.baseFontSize);
+        const headingText = block.data.heading.toUpperCase();
+        ctx.doc.text(headingText, ctx.leftMargin, ctx.y, { width: ctx.contentWidth });
+        ctx.y += ctx.doc.heightOfString(headingText, { width: ctx.contentWidth }) + SPACING.sm;
 
-        if (block.key === 'bank' && ctx.template.bank.show && ctx.data.bank) {
-          const blockHeight = this.getBankBlockHeight(ctx, sortedBankFields);
-          this.ensurePageSpace(ctx, blockHeight);
+        block.data.fields.forEach((f: any) => {
+          ctx.y += this.drawBankDetailsRow(ctx, `${f.label}: `, f.value, ctx.y) + SPACING.xs;
+        });
+        ctx.y += SPACING.sm;
+      }
 
-          ctx.doc.font(ctx.template.theme.fonts.heading).fillColor(ctx.primaryColor);
-          const headingText = (ctx.template.bank.heading || 'Bank Details').toUpperCase();
-          ctx.doc.text(headingText, ctx.leftMargin, ctx.y, { width: ctx.contentWidth });
-          ctx.y += ctx.doc.heightOfString(headingText, { width: ctx.contentWidth }) + SPACING.sm;
-
-          sortedBankFields.forEach(f => {
-            if (!f.visible) return;
-            const txt = this.getBankValue(ctx.data, f.key);
-            if (txt) {
-              ctx.y += this.drawBankDetailsRow(ctx, `${f.label}: `, txt, ctx.y) + SPACING.xs;
-            }
-          });
-        }
-
-        if (block.key === 'qr' && ctx.data.qrUrl) {
-          const blockHeight = 75 + SPACING.sm;
-          this.ensurePageSpace(ctx, blockHeight);
-          this.drawBase64Image(ctx, ctx.data.qrUrl, ctx.leftMargin, ctx.y, { width: 75, height: 75 });
-          ctx.y += 75 + SPACING.sm;
-        }
-      });
+      if (block.key === 'qr' && block.data.show && block.data.url) {
+        const blockHeight = 75 + SPACING.sm;
+        this.ensurePageSpace(ctx, blockHeight);
+        this.drawBase64Image(ctx, block.data.url, ctx.leftMargin, ctx.y, { width: 75, height: 75 });
+        ctx.y += 75 + SPACING.sm;
+      }
+    });
   }
 
   private drawSignature(ctx: RenderContext) {
-    if (!ctx.template.signature.show) return;
+    const sigBlock = ctx.model.footerBlocks.find(b => b.key === 'signature');
+    if (!sigBlock || !sigBlock.data.show) return;
 
-    const sigHeight = ctx.data.signatureUrl ? 80 : 50;
-    const stampOffset = (ctx.template.signature.showStamp && ctx.data.stampUrl) ? 10 : 0;
+    const SPACING = { xs: 4, sm: 8 };
+    const sigHeight = sigBlock.data.signatureUrl ? 60 : 36;
 
-    this.ensurePageSpace(ctx, sigHeight + stampOffset);
+    this.ensurePageSpace(ctx, sigHeight + SPACING.sm);
 
-    // Pin signature just above footer, but never leave a large blank gap
-    const sigY = Math.max(ctx.y + 8, ctx.usableBottom - sigHeight);
+    // Render signature immediately after content — no usableBottom pinning to avoid whitespace gap
+    const sigY = ctx.y + SPACING.sm;
 
-    // Draw stamp if enabled
-    if (ctx.template.signature.showStamp && ctx.data.stampUrl) {
-      this.drawBase64Image(ctx, ctx.data.stampUrl, ctx.leftMargin + ctx.contentWidth * 0.45, sigY - 10, { fit: [60, 60] });
+    if (sigBlock.data.showStamp && sigBlock.data.stampUrl) {
+      this.drawBase64Image(ctx, sigBlock.data.stampUrl, ctx.leftMargin + ctx.contentWidth * 0.45, sigY, { fit: [55, 55] });
     }
 
-    if (ctx.data.signatureUrl) {
-      this.drawBase64Image(ctx, ctx.data.signatureUrl, ctx.sigImageStartX, sigY, { fit: [120, 40] });
+    if (sigBlock.data.signatureUrl) {
+      this.drawBase64Image(ctx, sigBlock.data.signatureUrl, ctx.sigImageStartX, sigY, { fit: [120, 40] });
     }
 
-    const lineY = ctx.data.signatureUrl ? sigY + 44 : sigY + 10;
+    const lineY = sigBlock.data.signatureUrl ? sigY + 44 : sigY + 10;
     ctx.doc.strokeColor(ctx.mutedColor).lineWidth(0.5).moveTo(ctx.sigStartX, lineY).lineTo(ctx.leftMargin + ctx.contentWidth, lineY).stroke();
 
-    ctx.doc.font(ctx.template.theme.fonts.heading).fillColor(ctx.textColor).fontSize(ctx.template.theme.baseFontSize - 1);
-    const sigLabel = ctx.template.signature.label || 'Authorised Signatory';
+    ctx.doc.font(ctx.model.theme.fonts.heading).fillColor(ctx.textColor).fontSize(ctx.model.theme.baseFontSize - 1);
+    const sigLabel = sigBlock.data.label;
     ctx.doc.text(sigLabel, ctx.sigStartX, lineY + 4, {
       width: ctx.sigWidth,
       align: 'center',
     });
+
+    ctx.y = lineY + 4 + ctx.doc.currentLineHeight(true) + SPACING.xs;
   }
 
   private drawFooter(ctx: RenderContext) {
-    if (!ctx.template.footer.show) return;
+    const footerBlock = ctx.model.footerBlocks.find(b => b.key === 'footer');
+    if (!footerBlock || !footerBlock.data.show) return;
 
     const totalPages = ctx.doc.bufferedPageRange().count;
-    const currentPageIndex = ctx.doc.bufferedPageRange().start + totalPages - 1;
     for (let i = 0; i < totalPages; i++) {
       ctx.doc.switchToPage(i);
-      const oldY = ctx.doc.y;
+      
       const oldMargin = ctx.doc.page.margins.bottom;
       ctx.doc.page.margins.bottom = 0;
 
-      ctx.doc.strokeColor(ctx.borderColor).lineWidth(0.5).moveTo(ctx.leftMargin, ctx.doc.page.height - ctx.bottomMargin - 14).lineTo(ctx.pageWidth - ctx.rightMargin, ctx.doc.page.height - ctx.bottomMargin - 14).stroke();
+      ctx.doc.strokeColor(ctx.borderColor).lineWidth(0.5);
+      ctx.doc.moveTo(ctx.leftMargin, ctx.doc.page.height - ctx.bottomMargin - 14)
+        .lineTo(ctx.pageWidth - ctx.rightMargin, ctx.doc.page.height - ctx.bottomMargin - 14).stroke();
 
-      ctx.doc.font(ctx.template.theme.fonts.body).fontSize(ctx.template.theme.baseFontSize - 2).fillColor(ctx.mutedColor);
-      ctx.doc.text(ctx.template.footer.text || '', ctx.leftMargin, ctx.doc.page.height - ctx.bottomMargin - 8, {
+      ctx.doc.font(ctx.model.theme.fonts.body);
+      ctx.doc.fontSize(ctx.model.theme.baseFontSize - 2);
+      ctx.doc.fillColor(ctx.mutedColor);
+      ctx.doc.text(footerBlock.data.text || '', ctx.leftMargin, ctx.doc.page.height - ctx.bottomMargin - 8, {
         width: ctx.contentWidth,
         align: 'center',
       });
 
-      if (ctx.template.footer.showPageNumbers) {
+      if (footerBlock.data.showPageNumbers) {
         ctx.doc.text(`Page ${i + 1} of ${totalPages}`, ctx.leftMargin, ctx.doc.page.height - ctx.bottomMargin - 8, {
           width: ctx.contentWidth,
           align: 'right',
         });
       }
-
+      
       ctx.doc.page.margins.bottom = oldMargin;
-      ctx.doc.y = oldY;
     }
-    ctx.doc.switchToPage(currentPageIndex);
   }
 
   // ========================================================
-  // Layout Helper Functions (Private)
+  // Low-level Layout Helpers (Private)
   // ========================================================
 
   private drawBase64Image(ctx: RenderContext, base64Url: string, x: number, y: number, options: any) {
@@ -560,88 +528,80 @@ export class PdfRenderer implements InvoiceRenderer {
     }
   }
 
-  private drawMetadataRow(ctx: RenderContext, label: string, value: string, startY: number): number {
+  /**
+   * Renders a document-details metadata row with a fixed two-column layout.
+   * Label is left-aligned in a fixed-width column; value is right-aligned.
+   */
+  private drawMetadataRow(
+    ctx: RenderContext,
+    label: string,
+    value: string,
+    startY: number,
+    labelColWidth: number,
+    valueColX: number
+  ): number {
     ctx.doc.save();
+    const fontSize = ctx.model.theme.baseFontSize - 1;
+    ctx.doc.fontSize(fontSize);
 
-    // Measure widest visible label so all values share one vertical alignment column
-    const visibleFields = ctx.template.documentDetails.fields
-      .filter(f => f.visible)
-      .filter(f => {
-        if (f.key === 'number') return !!ctx.data.documentNumber;
-        if (f.key === 'date') return !!ctx.data.issueDate;
-        if (f.key === 'dueDate') return !!ctx.data.dueDate;
-        if (f.key === 'terms') return true;
-        return false;
-      });
+    // Label: bold, left-aligned, fixed column
+    ctx.doc.font(ctx.model.theme.fonts.heading).fillColor(ctx.mutedColor);
+    ctx.doc.text(`${label}:`, ctx.rightColStartX, startY, { width: labelColWidth, lineBreak: false });
 
-    ctx.doc.font(ctx.template.theme.fonts.heading).fontSize(ctx.template.theme.baseFontSize - 1);
-    const widestLabelW = visibleFields.reduce((max, f) => {
-      const w = ctx.doc.widthOfString(`${f.label}: `);
-      return w > max ? w : max;
-    }, 0);
-
-    // Value column starts right after the widest label (+ 4pt gap)
-    const GAP = 4;
-    const labelStartX = ctx.leftMargin + ctx.contentWidth - widestLabelW - GAP - ctx.doc.widthOfString(value);
-    const valueStartX = ctx.leftMargin + ctx.contentWidth - ctx.doc.widthOfString(value);
-
-    ctx.doc.font(ctx.template.theme.fonts.heading).fontSize(ctx.template.theme.baseFontSize - 1).fillColor(ctx.textColor);
-    ctx.doc.text(label, ctx.rightColStartX, startY, { width: widestLabelW, align: 'right' });
-    const h1 = ctx.doc.heightOfString(label, { width: widestLabelW });
-
-    ctx.doc.font(ctx.template.theme.fonts.body).fontSize(ctx.template.theme.baseFontSize - 1).fillColor(ctx.textColor);
-    ctx.doc.text(value, valueStartX, startY, { lineBreak: false });
-    const h2 = ctx.doc.currentLineHeight(true);
+    // Value: body, right-aligned within remaining width
+    const remainingWidth = ctx.rightColWidth - labelColWidth - 4;
+    ctx.doc.font(ctx.model.theme.fonts.body).fillColor(ctx.textColor);
+    ctx.doc.text(value, valueColX, startY, { width: remainingWidth, align: 'right', lineBreak: false });
 
     ctx.doc.restore();
-    return Math.max(h1, h2);
+    return ctx.doc.currentLineHeight(true);
   }
 
+  /**
+   * Renders a single totals row anchored to the right 45% of the content area.
+   * Grand Total (emphasis=true) renders with a primary-color banner.
+   */
   private drawTotalsRow(ctx: RenderContext, label: string, value: string, startY: number, emphasis: boolean): number {
     ctx.doc.save();
 
-    const fontSize = emphasis ? ctx.template.theme.baseFontSize + 1 : ctx.template.theme.baseFontSize - 1;
-    const font = emphasis ? ctx.template.theme.fonts.heading : ctx.template.theme.fonts.body;
+    const fontSize = emphasis ? ctx.model.theme.baseFontSize + 1 : ctx.model.theme.baseFontSize - 1;
+    const font = emphasis ? ctx.model.theme.fonts.heading : ctx.model.theme.fonts.body;
 
     ctx.doc.font(font).fontSize(fontSize);
+    const labelWidth = ctx.doc.widthOfString(label);
+    const valueWidth = ctx.doc.widthOfString(value);
+    const totalRowWidth = ctx.totalsWidth;
+    const rightEdge = ctx.totalsStartX + totalRowWidth;
 
-    // The totals block is anchored to the Amount column from the template.
-    // ctx.amountColX / ctx.amountColWidth are set during drawItemsTable from the
-    // actual amount (or last) column geometry — no hardcoded ratios.
-    const colStartX = ctx.amountColX;
-    const colWidth = ctx.amountColWidth;
-
-    // Value is right-aligned inside the amount column (mirrors the column's own alignment).
-    const valueW = ctx.doc.widthOfString(value);
-    const valueStartX = colStartX + colWidth - valueW;
-
-    // Label sits to the left of the amount column, right-aligned up to colStartX.
-    const labelW = ctx.doc.widthOfString(label);
     const GAP = 8;
-    const labelStartX = colStartX - labelW - GAP;
+    // Both label and value are right-aligned to the right edge, label before value
+    const valueStartX = rightEdge - valueWidth;
+    const labelStartX = valueStartX - labelWidth - GAP;
+
+    // Clamp labelStartX so it doesn't go before totalsStartX
+    const clampedLabelX = Math.max(ctx.totalsStartX, labelStartX);
 
     const textHeight = ctx.doc.currentLineHeight(true);
 
     if (emphasis) {
-      const BANNER_PAD_Y = 4;
-      const BANNER_PAD_X = 4;
-      // Banner spans from label start to right edge, anchored to amount column
-      const bannerStartX = Math.max(ctx.leftMargin, labelStartX - BANNER_PAD_X);
-      const bannerWidth = ctx.leftMargin + ctx.contentWidth - bannerStartX;
+      const BANNER_PAD_Y = 3;
       const bannerHeight = textHeight + BANNER_PAD_Y * 2;
 
       ctx.doc.fillColor(ctx.primaryColor);
-      ctx.doc.roundedRect(bannerStartX, startY, bannerWidth, bannerHeight, 2).fill();
+      ctx.doc.roundedRect(ctx.totalsStartX, startY, totalRowWidth, bannerHeight, 2).fill();
 
       ctx.doc.fillColor('#ffffff').font(font).fontSize(fontSize);
-      ctx.doc.text(label, labelStartX, startY + BANNER_PAD_Y, { lineBreak: false });
+      ctx.doc.text(label, clampedLabelX, startY + BANNER_PAD_Y, { lineBreak: false });
       ctx.doc.text(value, valueStartX, startY + BANNER_PAD_Y, { lineBreak: false });
 
       ctx.doc.restore();
       return bannerHeight;
     } else {
+      ctx.doc.strokeColor(ctx.borderColor).lineWidth(0.3)
+        .moveTo(ctx.totalsStartX, startY - 1).lineTo(rightEdge, startY - 1).stroke();
+
       ctx.doc.fillColor(ctx.textColor);
-      ctx.doc.text(label, labelStartX, startY, { lineBreak: false });
+      ctx.doc.text(label, clampedLabelX, startY, { lineBreak: false });
       ctx.doc.text(value, valueStartX, startY, { lineBreak: false });
 
       ctx.doc.restore();
@@ -652,8 +612,7 @@ export class PdfRenderer implements InvoiceRenderer {
   private drawBankDetailsRow(ctx: RenderContext, label: string, value: string, startY: number): number {
     ctx.doc.save();
 
-    // Measure the label width naturally; value starts right after
-    ctx.doc.font(ctx.template.theme.fonts.heading).fontSize(ctx.template.theme.baseFontSize - 1);
+    ctx.doc.font(ctx.model.theme.fonts.heading).fontSize(ctx.model.theme.baseFontSize - 1);
     const labelW = ctx.doc.widthOfString(label);
     const GAP = 6;
     const valueStartX = ctx.leftMargin + labelW + GAP;
@@ -663,7 +622,7 @@ export class PdfRenderer implements InvoiceRenderer {
     ctx.doc.text(label, ctx.leftMargin, startY, { lineBreak: false });
     const h1 = ctx.doc.currentLineHeight(true);
 
-    ctx.doc.font(ctx.template.theme.fonts.body).fontSize(ctx.template.theme.baseFontSize - 1).fillColor(ctx.mutedColor);
+    ctx.doc.font(ctx.model.theme.fonts.body).fontSize(ctx.model.theme.baseFontSize - 1).fillColor(ctx.mutedColor);
     ctx.doc.text(value, valueStartX, startY, { width: valueWidth, align: 'left' });
     const h2 = ctx.doc.heightOfString(value, { width: valueWidth });
 
@@ -671,78 +630,41 @@ export class PdfRenderer implements InvoiceRenderer {
     return Math.max(h1, h2);
   }
 
-  private getCellText(data: InvoiceData, item: any, colKey: string): string {
-    switch (colKey) {
-      case 'index': return String(item.index);
-      case 'sku': return item.sku || '';
-      case 'description': return item.description || '';
-      case 'type': return item.type || '';
-      case 'quantity': return String(item.quantity || 0);
-      case 'unit': return item.unit || 'PCS';
-      case 'rate': return formatCurrency(item.rate || 0, data.currencySymbol);
-      case 'tax': return item.taxLabel || 'EXEMPT';
-      case 'amount': return formatCurrency(item.amount || 0, data.currencySymbol);
-      default: return String(item.customFields?.[colKey] || '');
-    }
-  }
-
-  private getBankValue(data: InvoiceData, key: string): string {
-    if (!data.bank) return '';
-    switch (key) {
-      case 'bankName': return data.bank.bankName || '';
-      case 'accountHolder': return data.bank.accountHolder || '';
-      case 'accountNumber': return data.bank.accountNumber || '';
-      case 'iban': return data.bank.iban || '';
-      case 'bic': return data.bank.bic || '';
-      default: return '';
-    }
-  }
-
-  private getRowValue(data: InvoiceData, key: string): number {
-    switch (key) {
-      case 'subtotal': return data.subtotal;
-      case 'discount': return data.discount;
-      case 'tax': return data.taxTotal;
-      case 'shipping': return data.shipping;
-      case 'grandTotal': return data.grandTotal;
-      default: return 0;
-    }
-  }
-
   private getPaymentBlockHeight(ctx: RenderContext): number {
-    if (!ctx.template.payment.show || !ctx.template.payment.instructions) return 0;
+    const block = ctx.model.footerBlocks.find(b => b.key === 'payment');
+    if (!block || !block.data.show || !block.data.instructions) return 0;
     ctx.doc.save();
-    ctx.doc.font(ctx.template.theme.fonts.heading).fontSize(ctx.template.theme.baseFontSize);
-    const headingH = ctx.doc.heightOfString((ctx.template.payment.heading || 'Payment Instructions').toUpperCase(), { width: ctx.contentWidth });
-    ctx.doc.font(ctx.template.theme.fonts.body).fontSize(ctx.template.theme.baseFontSize - 1);
-    const textH = ctx.doc.heightOfString(ctx.template.payment.instructions, { width: ctx.contentWidth });
+    ctx.doc.font(ctx.model.theme.fonts.heading).fontSize(ctx.model.theme.baseFontSize);
+    const headingH = ctx.doc.heightOfString(block.data.heading.toUpperCase(), { width: ctx.contentWidth });
+    ctx.doc.font(ctx.model.theme.fonts.body).fontSize(ctx.model.theme.baseFontSize - 1);
+    const textH = ctx.doc.heightOfString(block.data.instructions, { width: ctx.contentWidth });
     ctx.doc.restore();
-    return headingH + 8 + textH + 12; // SPACING.sm + heading + SPACING.md
+    return headingH + 8 + textH + 12;
   }
 
   private getBankBlockHeight(ctx: RenderContext, sortedBankFields: any[]): number {
-    if (!ctx.template.bank.show || !ctx.data.bank) return 0;
+    const block = ctx.model.footerBlocks.find(b => b.key === 'bank');
+    if (!block || !block.data.show || !sortedBankFields || sortedBankFields.length === 0) return 0;
     ctx.doc.save();
-    ctx.doc.font(ctx.template.theme.fonts.heading).fontSize(ctx.template.theme.baseFontSize);
-    const headingH = ctx.doc.heightOfString((ctx.template.bank.heading || 'Bank Details').toUpperCase(), { width: ctx.contentWidth });
-    let bankHeight = headingH + 8; // SPACING.sm
+    ctx.doc.font(ctx.model.theme.fonts.heading).fontSize(ctx.model.theme.baseFontSize);
+    const headingH = ctx.doc.heightOfString(block.data.heading.toUpperCase(), { width: ctx.contentWidth });
+    let bankHeight = headingH + 8;
 
     sortedBankFields.forEach(f => {
-      if (!f.visible) return;
-      const txt = this.getBankValue(ctx.data, f.key);
+      const txt = f.value;
       if (txt) {
-        ctx.doc.font(ctx.template.theme.fonts.heading).fontSize(ctx.template.theme.baseFontSize - 1);
+        ctx.doc.font(ctx.model.theme.fonts.heading).fontSize(ctx.model.theme.baseFontSize - 1);
         const labelW = ctx.doc.widthOfString(`${f.label}: `);
-        ctx.doc.font(ctx.template.theme.fonts.body).fontSize(ctx.template.theme.baseFontSize - 1);
+        ctx.doc.font(ctx.model.theme.fonts.body).fontSize(ctx.model.theme.baseFontSize - 1);
         const valueW = ctx.doc.widthOfString(txt);
         const rowH = Math.max(
           ctx.doc.heightOfString(`${f.label}: `, { width: labelW }),
           ctx.doc.heightOfString(txt, { width: valueW })
         );
-        bankHeight += rowH + 4; // SPACING.xs
+        bankHeight += rowH + 4;
       }
     });
     ctx.doc.restore();
-    return bankHeight + 8; // SPACING.sm
+    return bankHeight + 8;
   }
 }

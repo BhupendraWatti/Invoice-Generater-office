@@ -207,15 +207,23 @@
       },
       {
         "key": "quantity",
-        "label": "Qty",
+        "label": "Type",
         "visible": true,
         "width": 10,
         "align": "right",
         "order": 2
       },
       {
-        "key": "col_1784100460226",
-        "label": "New Column",
+        "key": "col_1784109347444",
+        "label": "Techs",
+        "visible": true,
+        "width": 15,
+        "align": "left",
+        "order": 4
+      },
+      {
+        "key": "col_1784110081461",
+        "label": "Amount",
         "visible": true,
         "width": 15,
         "align": "left",

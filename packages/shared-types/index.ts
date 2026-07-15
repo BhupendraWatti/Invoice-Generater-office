@@ -786,3 +786,312 @@ export interface AuditLogDto {
   details?: string | null;
   createdAt: string;
 }
+
+// ========================================================
+// Shared Document Rendering Pipeline Utilities and Types
+// ========================================================
+
+export function formatCurrency(amount: number, symbol: string): string {
+  const sym = symbol === '₹' ? 'Rs. ' : symbol;
+  return `${sym}${Number(amount).toFixed(2)}`;
+}
+
+export function formatDate(dateStr?: string): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch (e) {
+    return dateStr;
+  }
+}
+
+export function replaceTokens(text: string, data: InvoiceData): string {
+  if (!text) return '';
+  return text
+    .replace(/{document.number}/g, data.documentNumber || '')
+    .replace(/{document.type}/g, data.documentType || 'INVOICE')
+    .replace(/{document.grandTotal}/g, formatCurrency(data.grandTotal, data.currencySymbol))
+    .replace(/{company.name}/g, data.organization.name || '')
+    .replace(/{customer.name}/g, data.billTo.name || '');
+}
+
+export function normalizeColumnWidths(columns: any[]): any[] {
+  const visibleCols = columns.filter(c => c.visible);
+  const totalWidth = visibleCols.reduce((sum, col) => sum + (col.width || 10), 0);
+  if (totalWidth <= 0) return visibleCols;
+  return visibleCols.map(col => ({
+    ...col,
+    width: Math.round(((col.width || 10) / totalWidth) * 100 * 100) / 100
+  }));
+}
+
+export function resolveColumnValue(item: any, colKey: string, currencySymbol: string): string {
+  // 1. Built-in fields
+  if (colKey === 'index') return String(item.index);
+  if (colKey === 'sku') return item.sku || '';
+  if (colKey === 'description') return item.description || '';
+  if (colKey === 'type') return item.type || '';
+  if (colKey === 'quantity') return String(item.quantity || 0);
+  if (colKey === 'unit') return item.unit || 'PCS';
+  if (colKey === 'rate') return formatCurrency(item.rate || 0, currencySymbol);
+  if (colKey === 'tax') return item.taxLabel || 'EXEMPT';
+  if (colKey === 'amount') return formatCurrency(item.amount || 0, currencySymbol);
+
+  // 2. Mapped root fields
+  if (item && colKey in item) return String(item[colKey] ?? '');
+
+  // 3. Custom fields
+  if (item && item.customFields && colKey in item.customFields) {
+    return String(item.customFields[colKey] ?? '');
+  }
+
+  // 4. Fallback
+  return '';
+}
+
+export interface SharedRenderModel {
+  theme: any;
+  watermark: {
+    enabled: boolean;
+    text: string;
+    opacity: number;
+    angle: number;
+  };
+  header: {
+    showTitle: boolean;
+    titleText: string;
+    accentBar: boolean;
+  };
+  logo: {
+    enabled: boolean;
+    position: string;
+    maxWidth: number;
+    url?: string;
+  };
+  metadata: {
+    fields: Array<{ key: string; label: string; value: string }>;
+  };
+  company: {
+    name: string;
+    lines: string[];
+    fields: Array<{ key: string; label: string; value: string }>;
+  };
+  customer: {
+    showBillTo: boolean;
+    heading: string;
+    name: string;
+    lines: string[];
+    fields: Array<{ key: string; label: string; value: string }>;
+  };
+  table: {
+    columns: Array<{ key: string; label: string; width: number; align: 'left' | 'center' | 'right'; visible: boolean; order: number }>;
+    rows: Array<{
+      index: number;
+      cells: Record<string, string>;
+      rawItem: any;
+    }>;
+    showBorders: boolean;
+    zebra: boolean;
+  };
+  totals: {
+    rows: Array<{ key: string; label: string; value: string; emphasis: boolean }>;
+  };
+  notes: {
+    show: boolean;
+    heading: string;
+    text: string;
+  };
+  footerBlocks: Array<{
+    key: string;
+    label: string;
+    order: number;
+    visible: boolean;
+    data: any;
+  }>;
+}
+
+export function buildRenderModel(data: InvoiceData, template: TemplateDefinitionDto): SharedRenderModel {
+  // Format metadata
+  const metadataFields: Array<{ key: string; label: string; value: string }> = [];
+  if (template.documentDetails.show) {
+    const sortedMetaFields = [...(template.documentDetails.fields || [])].sort((a, b) => a.order - b.order);
+    sortedMetaFields.forEach(f => {
+      if (!f.visible) return;
+      let textVal = '';
+      if (f.key === 'number') textVal = data.documentNumber;
+      else if (f.key === 'date') textVal = formatDate(data.issueDate);
+      else if (f.key === 'dueDate' && data.dueDate) textVal = formatDate(data.dueDate);
+      else if (f.key === 'terms') textVal = 'Due on Receipt';
+
+      if (textVal) {
+        metadataFields.push({ key: f.key, label: f.label, value: textVal });
+      }
+    });
+  }
+
+  // Format company fields
+  const companyFields: Array<{ key: string; label: string; value: string }> = [];
+  if (data.organization.email) companyFields.push({ key: 'email', label: 'Email', value: data.organization.email });
+  if (data.organization.website) companyFields.push({ key: 'website', label: 'Website', value: data.organization.website });
+  if (data.organization.phone) companyFields.push({ key: 'phone', label: 'Phone', value: data.organization.phone });
+  if (data.organization.taxId) companyFields.push({ key: 'taxId', label: 'GSTIN/VAT', value: data.organization.taxId });
+  if (data.organization.cin) companyFields.push({ key: 'cin', label: 'CIN', value: data.organization.cin });
+  if (data.organization.pan) companyFields.push({ key: 'pan', label: 'PAN', value: data.organization.pan });
+
+  // Format customer fields
+  const customerFields: Array<{ key: string; label: string; value: string }> = [];
+  if (data.billTo.phone) customerFields.push({ key: 'phone', label: 'Phone', value: data.billTo.phone });
+  if (data.billTo.email) customerFields.push({ key: 'email', label: 'Email', value: data.billTo.email });
+  if (data.billTo.taxId) customerFields.push({ key: 'taxId', label: 'GSTIN/VAT', value: data.billTo.taxId });
+
+  // Normalize column widths and build cells
+  const normalizedColumns = normalizeColumnWidths(template.table.columns).sort((a, b) => a.order - b.order);
+  const rows = data.items.map((item, index) => {
+    const cells: Record<string, string> = {};
+    normalizedColumns.forEach(col => {
+      cells[col.key] = resolveColumnValue(item, col.key, data.currencySymbol);
+    });
+    return {
+      index: item.index || (index + 1),
+      cells,
+      rawItem: item
+    };
+  });
+
+  // Build totals
+  const sortedTotalsRows = [...(template.totals.rows || [])]
+    .filter(r => r.visible)
+    .sort((a, b) => a.order - b.order);
+  const totals = sortedTotalsRows.map(row => {
+    let val = 0;
+    if (row.key === 'subtotal') val = data.subtotal;
+    else if (row.key === 'discount') val = data.discount;
+    else if (row.key === 'tax') val = data.taxTotal;
+    else if (row.key === 'shipping') val = data.shipping;
+    else if (row.key === 'grandTotal') val = data.grandTotal;
+
+    return {
+      key: row.key,
+      label: row.label,
+      value: formatCurrency(val, data.currencySymbol),
+      emphasis: row.emphasis
+    };
+  });
+
+  // Build footer blocks
+  const footerBlocksConfigs = [...(template.footerBlocks || [
+    { key: 'payment', label: 'Payment Instructions', visible: template.payment?.show ?? true, order: 0 },
+    { key: 'bank', label: 'Bank Details', visible: template.bank?.show ?? true, order: 1 },
+    { key: 'qr', label: 'QR Code', visible: true, order: 2 },
+    { key: 'signature', label: 'Signature', visible: template.signature?.show ?? true, order: 3 },
+    { key: 'footer', label: 'Footer Declaration', visible: template.footer?.show ?? true, order: 4 }
+  ])];
+
+  const activeFooterBlocks = footerBlocksConfigs
+    .filter(b => b.visible)
+    .sort((a, b) => a.order - b.order)
+    .map(block => {
+      let blockData: any = {};
+      if (block.key === 'payment') {
+        blockData = {
+          show: template.payment.show,
+          heading: template.payment.heading || 'Payment Instructions',
+          instructions: template.payment.instructions
+        };
+      } else if (block.key === 'bank') {
+        const fields = (template.bank.fields || []).filter(f => f.visible).map(f => {
+          let txt = '';
+          if (f.key === 'bankName') txt = data.bank?.bankName || '';
+          else if (f.key === 'accountHolder') txt = data.bank?.accountHolder || '';
+          else if (f.key === 'accountNumber') txt = data.bank?.accountNumber || '';
+          else if (f.key === 'iban') txt = data.bank?.iban || '';
+          else if (f.key === 'bic') txt = data.bank?.bic || '';
+          return { key: f.key, label: f.label, value: txt };
+        }).filter(f => f.value);
+        blockData = {
+          show: template.bank.show,
+          heading: template.bank.heading || 'Bank Details',
+          fields
+        };
+      } else if (block.key === 'qr') {
+        blockData = {
+          show: !!data.qrUrl,
+          url: data.qrUrl
+        };
+      } else if (block.key === 'signature') {
+        blockData = {
+          show: template.signature.show,
+          label: template.signature.label || 'Authorised Signatory',
+          signatureUrl: data.signatureUrl,
+          stampUrl: data.stampUrl,
+          showStamp: template.signature.showStamp
+        };
+      } else if (block.key === 'footer') {
+        blockData = {
+          show: template.footer.show,
+          text: template.footer.text,
+          showPageNumbers: template.footer.showPageNumbers
+        };
+      }
+      return {
+        key: block.key,
+        label: block.label,
+        order: block.order,
+        visible: block.visible,
+        data: blockData
+      };
+    });
+
+  return {
+    theme: template.theme,
+    watermark: {
+      enabled: template.watermark.enabled,
+      text: template.watermark.text || '',
+      opacity: template.watermark.opacity || 0.1,
+      angle: template.watermark.angle || 45
+    },
+    header: {
+      showTitle: template.header.showTitle,
+      titleText: replaceTokens(template.header.titleText, data),
+      accentBar: template.header.accentBar
+    },
+    logo: {
+      enabled: template.logo.enabled,
+      position: template.logo.position || 'left',
+      maxWidth: template.logo.maxWidth || 120,
+      url: data.logoUrl
+    },
+    metadata: {
+      fields: metadataFields
+    },
+    company: {
+      name: data.organization.name,
+      lines: data.organization.lines,
+      fields: companyFields
+    },
+    customer: {
+      showBillTo: template.customer.showBillTo,
+      heading: template.customer.billToHeading,
+      name: data.billTo.name,
+      lines: data.billTo.lines,
+      fields: customerFields
+    },
+    table: {
+      columns: normalizedColumns,
+      rows,
+      showBorders: template.table.showBorders,
+      zebra: template.table.zebra
+    },
+    totals: {
+      rows: totals
+    },
+    notes: {
+      show: template.notes.show,
+      heading: template.notes.heading || 'Notes',
+      text: data.notes || template.notes.text || ''
+    },
+    footerBlocks: activeFooterBlocks
+  };
+}
+

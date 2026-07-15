@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import MainLayout from '../../../components/shared/MainLayout';
 import ContextualInspector from '../../../components/shared/ContextualInspector';
 import { api } from '../../../lib/api';
-import { TemplateDefinitionDto, DocumentDto, InvoiceData } from '@docflow/shared-types';
+import { TemplateDefinitionDto, DocumentDto, InvoiceData, buildRenderModel } from '@docflow/shared-types';
+
 
 export default function TemplateDesignerWorkspacePage() {
   const params = useParams();
@@ -159,6 +160,9 @@ export default function TemplateDesignerWorkspacePage() {
   const themeColors = templateDef.theme.colors;
   const pageMargins = templateDef.page.margins;
 
+  // Build shared render model
+  const renderModel = (invoiceData && templateDef) ? buildRenderModel(invoiceData, templateDef) : null;
+
   // Safe array lists for configurations
   const sortedColumns = [...templateDef.table.columns].sort((a, b) => a.order - b.order);
   const sortedTotals = [...templateDef.totals.rows].sort((a, b) => a.order - b.order);
@@ -257,23 +261,23 @@ export default function TemplateDesignerWorkspacePage() {
           <div
             style={{
               padding: `${pageMargins.top}pt ${pageMargins.right}pt ${pageMargins.bottom}pt ${pageMargins.left}pt`,
-              fontFamily: templateDef.theme.fonts.body.includes('Mono') ? 'monospace' : templateDef.theme.fonts.body.includes('Serif') ? 'serif' : 'sans-serif',
-              fontSize: `${templateDef.theme.baseFontSize}pt`,
-              color: themeColors.text,
+              fontFamily: renderModel?.theme.fonts.body.includes('Mono') ? 'monospace' : renderModel?.theme.fonts.body.includes('Serif') ? 'serif' : 'sans-serif',
+              fontSize: `${renderModel?.theme.baseFontSize}pt`,
+              color: renderModel?.theme.colors.text,
             }}
             className="w-full max-w-[800px] min-h-[960px] bg-white border border-outline-variant shadow-xl rounded-lg relative overflow-hidden flex flex-col select-none text-body-sm font-medium"
           >
             {/* Watermark Visual Overlay */}
-            {templateDef.watermark.enabled && (
+            {renderModel?.watermark.enabled && (
               <div
                 style={{
-                  opacity: templateDef.watermark.opacity,
-                  transform: `translate(-50%, -50%) rotate(-${templateDef.watermark.angle}deg)`,
-                  color: themeColors.muted,
+                  opacity: renderModel.watermark.opacity,
+                  transform: `translate(-50%, -50%) rotate(-${renderModel.watermark.angle}deg)`,
+                  color: renderModel.theme.colors.muted,
                 }}
                 className="absolute left-1/2 top-1/2 font-bold text-[56px] pointer-events-none select-none tracking-wider whitespace-nowrap z-0 font-sans"
               >
-                {templateDef.watermark.text}
+                {renderModel.watermark.text}
               </div>
             )}
 
@@ -281,61 +285,69 @@ export default function TemplateDesignerWorkspacePage() {
             <div className="grid grid-cols-2 gap-8 mb-8 z-10">
               {/* Left Column: Logo + Bill To */}
               <div className="space-y-6">
-                {templateDef.logo.enabled && invoiceData.logoUrl && (
-                  <div className={`flex justify-${templateDef.logo.position === 'right' ? 'end' : templateDef.logo.position === 'center' ? 'center' : 'start'}`}>
+                {renderModel?.logo.enabled && renderModel.logo.url && (
+                  <div className={`flex justify-${renderModel.logo.position === 'right' ? 'end' : renderModel.logo.position === 'center' ? 'center' : 'start'}`}>
                     <img
-                      src={invoiceData.logoUrl}
+                      src={renderModel.logo.url}
                       alt="Logo"
-                      style={{ maxWidth: `${templateDef.logo.maxWidth}px`, maxHeight: '60px' }}
+                      style={{ maxWidth: `${renderModel.logo.maxWidth}px`, maxHeight: '60px' }}
                       className="object-contain"
                     />
                   </div>
                 )}
-                {templateDef.customer.showBillTo && (
+                {renderModel?.customer.showBillTo && (
                   <div>
-                    <h5 style={{ color: themeColors.primary }} className="font-bold text-[10px] uppercase tracking-wider mb-1.5">{templateDef.customer.billToHeading}</h5>
-                    <p className="font-bold text-on-surface">{invoiceData.billTo.name}</p>
-                    {invoiceData.billTo.lines.map((ln, i) => <p key={i} className="text-on-surface-variant/80 text-[11px] leading-snug">{ln}</p>)}
-                    {invoiceData.billTo.phone && <p className="text-on-surface-variant/80 text-[11px] leading-snug">{invoiceData.billTo.phone}</p>}
-                    {invoiceData.billTo.email && <p className="text-on-surface-variant/80 text-[11px] leading-snug">{invoiceData.billTo.email}</p>}
-                    {invoiceData.billTo.taxId && <p className="text-on-surface-variant/80 text-[11px] mt-1 font-semibold">{invoiceData.billTo.taxId}</p>}
+                    <h5 style={{ color: renderModel.theme.colors.primary }} className="font-bold text-[10px] uppercase tracking-wider mb-1.5">{renderModel.customer.heading}</h5>
+                    <p className="font-bold text-on-surface">{renderModel.customer.name}</p>
+                    {renderModel.customer.lines.map((ln, i) => <p key={i} className="text-on-surface-variant/80 text-[11px] leading-snug">{ln}</p>)}
+                    {renderModel.customer.fields.map(f => f.value && (
+                      <p key={f.key} className="text-on-surface-variant/80 text-[11px] leading-snug">{f.value}</p>
+                    ))}
                   </div>
                 )}
               </div>
 
               {/* Right Column: Title + Company Info */}
               <div className="text-right space-y-4">
-                {templateDef.header.showTitle && (
+                {renderModel?.header.showTitle && (
                   <div>
                     <h2
-                      style={{ color: themeColors.primary, fontSize: `${templateDef.theme.baseFontSize + 12}pt` }}
+                      style={{ color: renderModel.theme.colors.primary, fontSize: `${renderModel.theme.baseFontSize + 12}pt` }}
                       className="font-bold uppercase tracking-wide"
                     >
-                      {invoiceData.documentType}
+                      {renderModel.header.titleText}
                     </h2>
-                    {templateDef.header.accentBar && (
-                      <div style={{ backgroundColor: themeColors.primary }} className="h-0.5 w-full mt-1"></div>
+                    {renderModel.header.accentBar && (
+                      <div style={{ backgroundColor: renderModel.theme.colors.primary }} className="h-0.5 w-full mt-1"></div>
                     )}
                   </div>
                 )}
 
                 {/* Meta details */}
                 <div className="text-[11px] leading-relaxed">
-                  <p><strong className="font-semibold text-on-surface">Invoice No:</strong> {invoiceData.documentNumber}</p>
-                  <p><strong className="font-semibold text-on-surface">Issue Date:</strong> {formatDate(invoiceData.issueDate)}</p>
-                  {invoiceData.dueDate && <p><strong className="font-semibold text-on-surface">Due Date:</strong> {formatDate(invoiceData.dueDate)}</p>}
+                  {renderModel?.metadata.fields.map(f => (
+                    <p key={f.key}><strong className="font-semibold text-on-surface">{f.label}:</strong> {f.value}</p>
+                  ))}
                 </div>
 
                 {/* Company details */}
                 <div className="text-[11px] leading-relaxed text-on-surface-variant/90 space-y-0.5">
-                  <p className="font-bold text-on-surface text-[12px]">{invoiceData.organization.name}</p>
-                  {invoiceData.organization.lines.map((ln, i) => <p key={i} className="leading-tight">{ln}</p>)}
-                  {invoiceData.organization.email && <p><span className="font-semibold">Email:</span> {invoiceData.organization.email}</p>}
-                  {invoiceData.organization.website && <p><span className="font-semibold">Website:</span> {invoiceData.organization.website}</p>}
-                  {invoiceData.organization.phone && <p><span className="font-semibold">Phone:</span> {invoiceData.organization.phone}</p>}
-                  {invoiceData.organization.taxId && <p><span className="font-semibold">GSTIN/VAT:</span> {invoiceData.organization.taxId}</p>}
-                  {invoiceData.organization.cin && <p><span className="font-semibold">CIN:</span> {invoiceData.organization.cin}</p>}
-                  {invoiceData.organization.pan && <p><span className="font-semibold">PAN:</span> {invoiceData.organization.pan}</p>}
+                  <p className="font-bold text-on-surface text-[12px]">{renderModel?.company.name}</p>
+                  {renderModel?.company.lines.map((ln, i) => <p key={i} className="leading-tight">{ln}</p>)}
+                  {renderModel?.company.fields.map(f => {
+                    const labelMapping: Record<string, string> = {
+                      email: 'Email: ',
+                      website: 'Website: ',
+                      phone: 'Phone: ',
+                      taxId: 'GSTIN/VAT: ',
+                      cin: 'CIN: ',
+                      pan: 'PAN: '
+                    };
+                    const prefix = labelMapping[f.key] || `${f.label}: `;
+                    return f.value && (
+                      <p key={f.key}><span className="font-semibold">{prefix}</span>{f.value}</p>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -345,13 +357,13 @@ export default function TemplateDesignerWorkspacePage() {
               <table className="w-full text-left border-collapse text-[11px] font-semibold">
                 <thead>
                   <tr
-                    style={{ backgroundColor: themeColors.tableHeaderBg, color: themeColors.tableHeaderText }}
+                    style={{ backgroundColor: renderModel?.theme.colors.tableHeaderBg, color: renderModel?.theme.colors.tableHeaderText }}
                     className="border-b border-outline-variant/60"
                   >
-                    {sortedColumns.map(col => col.visible && (
+                    {renderModel?.table.columns.map(col => (
                       <th
                         key={col.key}
-                        style={{ width: `${col.width}%`, textAlign: col.align === 'right' ? 'right' : col.align === 'center' ? 'center' : 'left' }}
+                        style={{ width: `${col.width}%`, textAlign: col.align }}
                         className="p-2"
                       >
                         {col.label.toUpperCase()}
@@ -360,33 +372,20 @@ export default function TemplateDesignerWorkspacePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/30 text-on-surface">
-                  {invoiceData.items.map((item, rIdx) => (
+                  {renderModel?.table.rows.map((row, rIdx) => (
                     <tr
-                      key={item.index}
-                      style={{ backgroundColor: templateDef.table.zebra && rIdx % 2 === 1 ? themeColors.zebraBg : 'transparent' }}
+                      key={row.index}
+                      style={{ backgroundColor: renderModel.table.zebra && rIdx % 2 === 1 ? renderModel.theme.colors.zebraBg : 'transparent' }}
                     >
-                      {sortedColumns.map(col => {
-                        if (!col.visible) return null;
-                        let val = '';
-                        if (col.key === 'index') val = String(item.index);
-                        else if (col.key === 'sku') val = item.sku;
-                        else if (col.key === 'description') val = item.description;
-                        else if (col.key === 'quantity') val = String(item.quantity);
-                        else if (col.key === 'unit') val = item.unit;
-                        else if (col.key === 'rate') val = formatCurrency(item.rate, invoiceData.currencySymbol);
-                        else if (col.key === 'tax') val = item.taxLabel;
-                        else if (col.key === 'amount') val = formatCurrency(item.amount, invoiceData.currencySymbol);
-
-                        return (
-                          <td
-                            key={col.key}
-                            style={{ textAlign: col.align === 'right' ? 'right' : col.align === 'center' ? 'center' : 'left' }}
-                            className="p-2.5 align-middle"
-                          >
-                            {val}
-                          </td>
-                        );
-                      })}
+                      {renderModel.table.columns.map(col => (
+                        <td
+                          key={col.key}
+                          style={{ textAlign: col.align }}
+                          className="p-2.5 align-middle"
+                        >
+                          {row.cells[col.key]}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
@@ -396,124 +395,118 @@ export default function TemplateDesignerWorkspacePage() {
             {/* Totals & Notes bottom grid */}
             <div className="grid grid-cols-12 gap-6 mt-4 mb-6 z-10">
               <div className="col-span-7">
-                {templateDef.notes.show && (invoiceData.notes || templateDef.notes.text) && (
+                {renderModel?.notes.show && renderModel.notes.text && (
                   <div>
-                    <h6 style={{ color: themeColors.primary }} className="font-bold text-[9px] uppercase tracking-wider mb-1">{templateDef.notes.heading}</h6>
-                    <p className="text-[10px] text-on-surface-variant/80 whitespace-pre-line leading-relaxed">{invoiceData.notes || templateDef.notes.text}</p>
+                    <h6 style={{ color: renderModel.theme.colors.primary }} className="font-bold text-[9px] uppercase tracking-wider mb-1">{renderModel.notes.heading}</h6>
+                    <p className="text-[10px] text-on-surface-variant/80 whitespace-pre-line leading-relaxed">{renderModel.notes.text}</p>
                   </div>
                 )}
               </div>
               <div className="col-span-5 space-y-1.5 text-[11px] leading-relaxed">
-                {sortedTotals.map(row => {
-                  if (!row.visible) return null;
-                  let val = 0;
-                  if (row.key === 'subtotal') val = invoiceData.subtotal;
-                  else if (row.key === 'discount') val = invoiceData.discount;
-                  else if (row.key === 'tax') val = invoiceData.taxTotal;
-                  else if (row.key === 'shipping') val = invoiceData.shipping;
-                  else if (row.key === 'grandTotal') val = invoiceData.grandTotal;
-
-                  return (
-                    <div
-                      key={row.key}
-                      style={{ color: row.emphasis ? themeColors.primary : themeColors.text }}
-                      className={`flex justify-between ${row.emphasis ? 'font-bold text-[12px] border-t border-outline-variant/60 pt-1.5 mt-1.5' : ''}`}
-                    >
-                      <span>{row.label}:</span>
-                      <span>{formatCurrency(val, invoiceData.currencySymbol)}</span>
-                    </div>
-                  );
-                })}
+                {renderModel?.totals.rows.map(row => (
+                  <div
+                    key={row.key}
+                    style={{ color: row.emphasis ? renderModel.theme.colors.primary : renderModel.theme.colors.text }}
+                    className={`flex justify-between ${row.emphasis ? 'font-bold text-[12px] border-t border-outline-variant/60 pt-1.5 mt-1.5' : ''}`}
+                  >
+                    <span>{row.label}:</span>
+                    <span>{row.value}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
             {/* Movable Footer Blocks */}
             <div className="mt-auto space-y-6 z-10">
-              {[...(templateDef.footerBlocks || [])]
-                .sort((a, b) => a.order - b.order)
-                .map(block => {
-                  if (!block.visible) return null;
+              {renderModel?.footerBlocks.map(block => {
+                if (block.key === 'payment' && block.data.show && block.data.instructions) {
+                  return (
+                    <div key={block.key} className="border-t border-outline-variant/40 pt-4 text-[10px] leading-relaxed">
+                      <h6 style={{ color: renderModel.theme.colors.primary }} className="font-bold text-[9px] uppercase tracking-wider mb-1">{block.data.heading}</h6>
+                      <p className="text-on-surface-variant/80">{block.data.instructions}</p>
+                    </div>
+                  );
+                }
 
-                  if (block.key === 'payment' && templateDef.payment.show && templateDef.payment.instructions) {
-                    return (
-                      <div key={block.key} className="border-t border-outline-variant/40 pt-4 text-[10px] leading-relaxed">
-                        <h6 style={{ color: themeColors.primary }} className="font-bold text-[9px] uppercase tracking-wider mb-1">{templateDef.payment.heading}</h6>
-                        <p className="text-on-surface-variant/80">{templateDef.payment.instructions}</p>
+                if (block.key === 'bank' && block.data.show && block.data.fields && block.data.fields.length > 0) {
+                  return (
+                    <div key={block.key} className="border-t border-outline-variant/40 pt-4 text-[10px] leading-relaxed">
+                      <h6 style={{ color: renderModel.theme.colors.primary }} className="font-bold text-[9px] uppercase tracking-wider mb-1">{block.data.heading}</h6>
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        {block.data.fields.map((f: any) => (
+                          <p key={f.key} className="text-on-surface-variant/80">
+                            <strong className="font-semibold text-on-surface">{f.label}:</strong> {f.value}
+                          </p>
+                        ))}
                       </div>
-                    );
-                  }
+                    </div>
+                  );
+                }
 
-                  if (block.key === 'bank' && templateDef.bank.show && invoiceData.bank) {
-                    return (
-                      <div key={block.key} className="border-t border-outline-variant/40 pt-4 text-[10px] leading-relaxed">
-                        <h6 style={{ color: themeColors.primary }} className="font-bold text-[9px] uppercase tracking-wider mb-1">{templateDef.bank.heading}</h6>
-                        <div className="grid grid-cols-2 gap-2 mt-1">
-                          {templateDef.bank.fields.map(f => {
-                            if (!f.visible) return null;
-                            let txt = '';
-                            if (f.key === 'bankName') txt = invoiceData.bank?.bankName || '';
-                            else if (f.key === 'accountHolder') txt = invoiceData.bank?.accountHolder || '';
-                            else if (f.key === 'accountNumber') txt = invoiceData.bank?.accountNumber || '';
-                            else if (f.key === 'iban') txt = invoiceData.bank?.iban || '';
-                            else if (f.key === 'bic') txt = invoiceData.bank?.bic || '';
-                            if (!txt) return null;
-                            return (
-                              <p key={f.key} className="text-on-surface-variant/80">
-                                <strong className="font-semibold text-on-surface">{f.label}:</strong> {txt}
-                              </p>
-                            );
-                          })}
+                if (block.key === 'qr' && block.data.show && block.data.url) {
+                  return (
+                    <div key={block.key} className="pt-2">
+                      <img
+                        src={block.data.url}
+                        alt="QR Code"
+                        className="w-20 h-20 object-contain border border-outline-variant rounded p-1"
+                      />
+                    </div>
+                  );
+                }
+
+                if (block.key === 'signature' && block.data.show) {
+                  return (
+                    <div key={block.key} className="pt-6 text-right text-[10px]">
+                      {block.data.signatureUrl ? (
+                        <div className="inline-block text-center space-y-1">
+                          <img
+                            src={block.data.signatureUrl}
+                            alt="Signature"
+                            className="h-10 object-contain mx-auto"
+                          />
+                          {block.data.stampUrl && block.data.showStamp && (
+                            <div className="relative inline-block">
+                              <img
+                                src={block.data.stampUrl}
+                                alt="Stamp"
+                                className="h-10 object-contain mx-auto absolute -top-12 -left-12 opacity-80"
+                              />
+                            </div>
+                          )}
+                          <div className="border-t border-outline-variant w-40 inline-block"></div>
+                          <p className="font-bold text-on-surface mt-1 pr-6">{block.data.label}</p>
                         </div>
-                      </div>
-                    );
-                  }
+                      ) : (
+                        <div className="inline-block">
+                          {block.data.stampUrl && block.data.showStamp && (
+                            <div className="relative inline-block">
+                              <img
+                                src={block.data.stampUrl}
+                                alt="Stamp"
+                                className="h-10 object-contain mx-auto absolute -top-12 -left-12 opacity-80"
+                              />
+                            </div>
+                          )}
+                          <div className="border-t border-outline-variant w-40 inline-block"></div>
+                          <p className="font-bold text-on-surface mt-1 pr-6">{block.data.label}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
 
-                  if (block.key === 'qr' && invoiceData.qrUrl) {
-                    return (
-                      <div key={block.key} className="pt-2">
-                        <img
-                          src={invoiceData.qrUrl}
-                          alt="QR Code"
-                          className="w-20 h-20 object-contain border border-outline-variant rounded p-1"
-                        />
-                      </div>
-                    );
-                  }
+                if (block.key === 'footer' && block.data.show) {
+                  return (
+                    <div key={block.key} className="pt-2 border-t border-outline-variant/30 text-[9px] text-on-surface-variant/70 text-center flex justify-between">
+                      <span>{block.data.text}</span>
+                      {block.data.showPageNumbers && <span>Page 1 of 1</span>}
+                    </div>
+                  );
+                }
 
-                  if (block.key === 'signature' && templateDef.signature.show) {
-                    return (
-                      <div key={block.key} className="pt-6 text-right text-[10px]">
-                        {invoiceData.signatureUrl ? (
-                          <div className="inline-block text-center space-y-1">
-                            <img
-                              src={invoiceData.signatureUrl}
-                              alt="Signature"
-                              className="h-10 object-contain mx-auto"
-                            />
-                            <div className="border-t border-outline-variant w-40 inline-block"></div>
-                            <p className="font-bold text-on-surface mt-1 pr-6">{templateDef.signature.label}</p>
-                          </div>
-                        ) : (
-                          <div className="inline-block">
-                            <div className="border-t border-outline-variant w-40 inline-block"></div>
-                            <p className="font-bold text-on-surface mt-1 pr-6">{templateDef.signature.label}</p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  if (block.key === 'footer' && templateDef.footer.show) {
-                    return (
-                      <div key={block.key} className="pt-2 border-t border-outline-variant/30 text-[9px] text-on-surface-variant/70 text-center flex justify-between">
-                        <span>{templateDef.footer.text}</span>
-                        {templateDef.footer.showPageNumbers && <span>Page 1 of 1</span>}
-                      </div>
-                    );
-                  }
-
-                  return null;
-                })}
+                return null;
+              })}
             </div>
           </div>
         </section>
@@ -990,19 +983,57 @@ export default function TemplateDesignerWorkspacePage() {
                               }}
                               className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
                             />
-                            <span className="font-bold text-on-surface truncate max-w-[120px]">{col.label || col.key}</span>
+                            <span className="font-bold text-on-surface truncate max-w-[100px]">{col.label || col.key}</span>
                           </div>
 
-                          <button
-                            onClick={() => {
-                              const newCols = templateDef.table.columns.filter(c => c.key !== col.key);
-                              updateNestedConfig('table', 'columns', newCols);
-                            }}
-                            className="text-on-surface-variant hover:text-error cursor-pointer bg-transparent border-none"
-                            title="Delete Column"
-                          >
-                            <span className="material-symbols-outlined text-[14px]">delete</span>
-                          </button>
+                          <div className="flex items-center gap-0.5">
+                            {/* Move Up */}
+                            <button
+                              disabled={idx === 0}
+                              onClick={() => {
+                                const prev = sortedColumns[idx - 1];
+                                if (!prev) return;
+                                const newCols = templateDef.table.columns.map(c => {
+                                  if (c.key === col.key) return { ...c, order: prev.order };
+                                  if (c.key === prev.key) return { ...c, order: col.order };
+                                  return c;
+                                });
+                                updateNestedConfig('table', 'columns', newCols);
+                              }}
+                              className="text-on-surface-variant hover:text-primary disabled:opacity-30 cursor-pointer bg-transparent border-none"
+                              title="Move Column Left"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">arrow_upward</span>
+                            </button>
+                            {/* Move Down */}
+                            <button
+                              disabled={idx === sortedColumns.length - 1}
+                              onClick={() => {
+                                const next = sortedColumns[idx + 1];
+                                if (!next) return;
+                                const newCols = templateDef.table.columns.map(c => {
+                                  if (c.key === col.key) return { ...c, order: next.order };
+                                  if (c.key === next.key) return { ...c, order: col.order };
+                                  return c;
+                                });
+                                updateNestedConfig('table', 'columns', newCols);
+                              }}
+                              className="text-on-surface-variant hover:text-primary disabled:opacity-30 cursor-pointer bg-transparent border-none"
+                              title="Move Column Right"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">arrow_downward</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const newCols = templateDef.table.columns.filter(c => c.key !== col.key);
+                                updateNestedConfig('table', 'columns', newCols);
+                              }}
+                              className="text-on-surface-variant hover:text-error cursor-pointer bg-transparent border-none"
+                              title="Delete Column"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">delete</span>
+                            </button>
+                          </div>
                         </div>
                         {col.visible && (
                           <div className="space-y-2 text-body-sm mt-1">
@@ -1300,20 +1331,4 @@ export default function TemplateDesignerWorkspacePage() {
       </main>
     </MainLayout>
   );
-}
-
-// Helpers
-function formatCurrency(amount: number, symbol: string): string {
-  const sym = symbol === '₹' ? 'Rs. ' : symbol;
-  return `${sym}${amount.toFixed(2)}`;
-}
-
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return '—';
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch (e) {
-    return dateStr;
-  }
 }

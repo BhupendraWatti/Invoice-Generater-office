@@ -1,36 +1,38 @@
-import { InvoiceData, TemplateDefinitionDto } from '@docflow/shared-types';
-import { InvoiceRenderer, formatCurrency, formatDate, replaceTokens } from './renderer.interface';
-import { Document, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, HeadingLevel, Packer, Footer, ImageRun } from 'docx';
+import { InvoiceData, TemplateDefinitionDto, buildRenderModel, SharedRenderModel } from '@docflow/shared-types';
+import { InvoiceRenderer } from './renderer.interface';
+import { Document, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, Packer, Footer, ImageRun } from 'docx';
 
 export class DocxRenderer implements InvoiceRenderer {
   async render(data: InvoiceData, template: TemplateDefinitionDto): Promise<Buffer> {
-    const primaryColor = template.theme.colors.primary.replace('#', '');
-    const textColor = template.theme.colors.text.replace('#', '');
-    const mutedColor = template.theme.colors.muted.replace('#', '');
-    const borderColor = template.theme.colors.border.replace('#', '');
-    const headerBgColor = template.theme.colors.tableHeaderBg.replace('#', '');
-    const headerTextColor = template.theme.colors.tableHeaderText.replace('#', '');
-    const zebraBgColor = template.theme.colors.zebraBg.replace('#', '');
+    const model = buildRenderModel(data, template);
+
+    const primaryColor = model.theme.colors.primary.replace('#', '');
+    const textColor = model.theme.colors.text.replace('#', '');
+    const mutedColor = model.theme.colors.muted.replace('#', '');
+    const borderColor = model.theme.colors.border.replace('#', '');
+    const headerBgColor = model.theme.colors.tableHeaderBg.replace('#', '');
+    const headerTextColor = model.theme.colors.tableHeaderText.replace('#', '');
+    const zebraBgColor = model.theme.colors.zebraBg.replace('#', '');
 
     const documentChildren: any[] = [];
 
     // ========================================================
-    // Redesigned Header: Left Column & Right Column Layout
+    // Header Layout: Left Column & Right Column
     // ========================================================
     const leftColumnChildren: any[] = [];
     const rightColumnChildren: any[] = [];
 
     // LEFT COLUMN: Logo + Bill To
-    if (template.logo.enabled && data.logoUrl) {
+    if (model.logo.enabled && model.logo.url) {
       try {
-        const base64Data = data.logoUrl.replace(/^data:image\/\w+;base64,/, '');
+        const base64Data = model.logo.url.replace(/^data:image\/\w+;base64,/, '');
         const imgBuffer = Buffer.from(base64Data, 'base64');
         leftColumnChildren.push(
           new Paragraph({
             children: [
               new ImageRun({
                 data: imgBuffer,
-                transformation: { width: 120, height: 45 },
+                transformation: { width: model.logo.maxWidth, height: 45 },
                 type: 'png'
               })
             ],
@@ -42,47 +44,39 @@ export class DocxRenderer implements InvoiceRenderer {
       }
     }
 
-    if (template.customer.showBillTo) {
+    if (model.customer.showBillTo) {
       leftColumnChildren.push(
         new Paragraph({
           spacing: { before: 80, after: 60 },
           children: [
             new TextRun({
-              text: template.customer.billToHeading.toUpperCase(),
+              text: model.customer.heading.toUpperCase(),
               bold: true,
               color: primaryColor,
-              size: (template.theme.baseFontSize - 1) * 2,
+              size: (model.theme.baseFontSize - 1) * 2,
             })
           ]
         })
       );
 
       const customerDetailsTexts: any[] = [];
-      if (data.billTo.name) {
+      if (model.customer.name) {
         customerDetailsTexts.push(
-          new TextRun({ text: data.billTo.name, bold: true, color: textColor })
+          new TextRun({ text: model.customer.name, bold: true, color: textColor })
         );
       }
-      data.billTo.lines.forEach(line => {
+      model.customer.lines.forEach(line => {
         customerDetailsTexts.push(
           new TextRun({ text: line, color: mutedColor, break: 1 })
         );
       });
-      if (data.billTo.phone) {
-        customerDetailsTexts.push(
-          new TextRun({ text: data.billTo.phone, color: mutedColor, break: 1 })
-        );
-      }
-      if (data.billTo.email) {
-        customerDetailsTexts.push(
-          new TextRun({ text: data.billTo.email, color: mutedColor, break: 1 })
-        );
-      }
-      if (data.billTo.taxId) {
-        customerDetailsTexts.push(
-          new TextRun({ text: data.billTo.taxId, color: mutedColor, break: 1 })
-        );
-      }
+      model.customer.fields.forEach(field => {
+        if (field.value) {
+          customerDetailsTexts.push(
+            new TextRun({ text: field.value, color: mutedColor, break: 1 })
+          );
+        }
+      });
 
       leftColumnChildren.push(
         new Paragraph({
@@ -93,20 +87,16 @@ export class DocxRenderer implements InvoiceRenderer {
     }
 
     // RIGHT COLUMN: Title, Meta, and Company Info
-    const rightXPercent = 50;
-    const rightWidth = 50;
-
-    if (template.header.showTitle) {
-      const titleText = replaceTokens(template.header.titleText, data);
+    if (model.header.showTitle) {
       rightColumnChildren.push(
         new Paragraph({
           alignment: AlignmentType.RIGHT,
           spacing: { after: 80 },
           children: [
             new TextRun({
-              text: titleText.toUpperCase(),
+              text: model.header.titleText.toUpperCase(),
               bold: true,
-              size: (template.theme.baseFontSize + 12) * 2,
+              size: (model.theme.baseFontSize + 12) * 2,
               color: primaryColor,
             }),
           ],
@@ -114,62 +104,48 @@ export class DocxRenderer implements InvoiceRenderer {
       );
     }
 
-    if (template.documentDetails.show) {
-      const metaDetailsParagraphs: any[] = [];
-      const sortedMetaFields = [...template.documentDetails.fields].sort((a, b) => a.order - b.order);
-      sortedMetaFields.forEach(f => {
-        if (!f.visible) return;
-        let textVal = '';
-        if (f.key === 'number') textVal = data.documentNumber;
-        else if (f.key === 'date') textVal = formatDate(data.issueDate);
-        else if (f.key === 'dueDate' && data.dueDate) textVal = formatDate(data.dueDate);
-        else if (f.key === 'terms') textVal = 'Due on Receipt';
-
-        if (textVal) {
-          metaDetailsParagraphs.push(
-            new TextRun({ text: `${f.label}: `, bold: true, color: textColor, break: metaDetailsParagraphs.length > 0 ? 1 : 0 }),
-            new TextRun({ text: textVal, color: textColor })
-          );
-        }
-      });
-      if (metaDetailsParagraphs.length > 0) {
-        rightColumnChildren.push(
-          new Paragraph({
-            alignment: AlignmentType.RIGHT,
-            children: metaDetailsParagraphs,
-            spacing: { after: 100 }
-          })
-        );
-      }
+    const metaDetailsParagraphs: any[] = [];
+    model.metadata.fields.forEach(f => {
+      metaDetailsParagraphs.push(
+        new TextRun({ text: `${f.label}: `, bold: true, color: textColor, break: metaDetailsParagraphs.length > 0 ? 1 : 0 }),
+        new TextRun({ text: f.value, color: textColor })
+      );
+    });
+    if (metaDetailsParagraphs.length > 0) {
+      rightColumnChildren.push(
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: metaDetailsParagraphs,
+          spacing: { after: 100 }
+        })
+      );
     }
 
     const companyInfoTexts: any[] = [];
     companyInfoTexts.push(
-      new TextRun({ text: data.organization.name, bold: true, color: textColor })
+      new TextRun({ text: model.company.name, bold: true, color: textColor })
     );
-    data.organization.lines.forEach(line => {
+    model.company.lines.forEach(line => {
       companyInfoTexts.push(
         new TextRun({ text: line, color: mutedColor, break: 1 })
       );
     });
-    if (data.organization.email) {
-      companyInfoTexts.push(new TextRun({ text: `Email: ${data.organization.email}`, color: mutedColor, break: 1 }));
-    }
-    if (data.organization.website) {
-      companyInfoTexts.push(new TextRun({ text: `Website: ${data.organization.website}`, color: mutedColor, break: 1 }));
-    }
-    if (data.organization.phone) {
-      companyInfoTexts.push(new TextRun({ text: `Phone: ${data.organization.phone}`, color: mutedColor, break: 1 }));
-    }
-    if (data.organization.taxId) {
-      companyInfoTexts.push(new TextRun({ text: `GSTIN/VAT: ${data.organization.taxId}`, color: mutedColor, break: 1 }));
-    }
-    if (data.organization.cin) {
-      companyInfoTexts.push(new TextRun({ text: `CIN: ${data.organization.cin}`, color: mutedColor, break: 1 }));
-    }
-    if (data.organization.pan) {
-      companyInfoTexts.push(new TextRun({ text: `PAN: ${data.organization.pan}`, color: mutedColor, break: 1 }));
-    }
+    model.company.fields.forEach(field => {
+      if (field.value) {
+        const labelMapping: Record<string, string> = {
+          email: 'Email: ',
+          website: 'Website: ',
+          phone: 'Phone: ',
+          taxId: 'GSTIN/VAT: ',
+          cin: 'CIN: ',
+          pan: 'PAN: '
+        };
+        const prefix = labelMapping[field.key] || `${field.label}: `;
+        companyInfoTexts.push(
+          new TextRun({ text: `${prefix}${field.value}`, color: mutedColor, break: 1 })
+        );
+      }
+    });
 
     rightColumnChildren.push(
       new Paragraph({
@@ -205,12 +181,10 @@ export class DocxRenderer implements InvoiceRenderer {
     documentChildren.push(headerColumnsTable);
     documentChildren.push(new Paragraph({ spacing: { after: 180 } }));
 
-    // 4. Line Items Table
-    const sortedColumns = [...template.table.columns]
-      .filter(c => c.visible)
-      .sort((a, b) => a.order - b.order);
-
-    const tableHeaderCells = sortedColumns.map(col => {
+    // ========================================================
+    // Line Items Table
+    // ========================================================
+    const tableHeaderCells = model.table.columns.map(col => {
       let align: any = AlignmentType.LEFT;
       if (col.align === 'center') align = AlignmentType.CENTER;
       if (col.align === 'right') align = AlignmentType.RIGHT;
@@ -226,7 +200,7 @@ export class DocxRenderer implements InvoiceRenderer {
                 text: col.label.toUpperCase(),
                 bold: true,
                 color: headerTextColor,
-                size: template.theme.baseFontSize * 2,
+                size: model.theme.baseFontSize * 2,
               }),
             ],
           }),
@@ -240,26 +214,16 @@ export class DocxRenderer implements InvoiceRenderer {
       }),
     ];
 
-    data.items.forEach((item, rIdx) => {
-      const isZebra = template.table.zebra && rIdx % 2 === 1;
+    model.table.rows.forEach((row, rIdx) => {
+      const isZebra = model.table.zebra && rIdx % 2 === 1;
       const rowFill = isZebra ? zebraBgColor : 'FFFFFF';
 
-      const cells = sortedColumns.map(col => {
+      const cells = model.table.columns.map(col => {
         let align: any = AlignmentType.LEFT;
         if (col.align === 'center') align = AlignmentType.CENTER;
         if (col.align === 'right') align = AlignmentType.RIGHT;
 
-        let txt = '';
-        if (col.key === 'index') txt = String(item.index);
-        else if (col.key === 'sku') txt = item.sku || '';
-        else if (col.key === 'description') txt = item.description || '';
-        else if (col.key === 'type') txt = item.type || '';
-        else if (col.key === 'quantity') txt = String(item.quantity || 0);
-        else if (col.key === 'unit') txt = item.unit || 'PCS';
-        else if (col.key === 'rate') txt = formatCurrency(item.rate || 0, data.currencySymbol);
-        else if (col.key === 'tax') txt = item.taxLabel || 'EXEMPT';
-        else if (col.key === 'amount') txt = formatCurrency(item.amount || 0, data.currencySymbol);
-        else txt = String(item.customFields?.[col.key] || '');
+        const txt = row.cells[col.key] || '';
 
         return new TableCell({
           width: { size: col.width || 10, type: WidthType.PERCENTAGE },
@@ -271,7 +235,7 @@ export class DocxRenderer implements InvoiceRenderer {
                 new TextRun({
                   text: txt,
                   color: textColor,
-                  size: template.theme.baseFontSize * 2,
+                  size: model.theme.baseFontSize * 2,
                 }),
               ],
             }),
@@ -288,7 +252,7 @@ export class DocxRenderer implements InvoiceRenderer {
 
     const itemsTable = new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: template.table.showBorders
+      borders: model.table.showBorders
         ? {
             top: { style: BorderStyle.SINGLE, size: 8, color: borderColor },
             bottom: { style: BorderStyle.SINGLE, size: 8, color: borderColor },
@@ -310,22 +274,11 @@ export class DocxRenderer implements InvoiceRenderer {
     documentChildren.push(itemsTable);
     documentChildren.push(new Paragraph({ spacing: { after: 200 } }));
 
-    // 5. Totals Block & Notes
-    const totalsRows = [...template.totals.rows]
-      .filter(r => r.visible)
-      .sort((a, b) => a.order - b.order);
-
+    // ========================================================
+    // Totals Block & Notes
+    // ========================================================
     const totalsParagraphs: Paragraph[] = [];
-    totalsRows.forEach(row => {
-      let val = 0;
-      if (row.key === 'subtotal') val = data.subtotal;
-      else if (row.key === 'discount') val = data.discount;
-      else if (row.key === 'tax') val = data.taxTotal;
-      else if (row.key === 'shipping') val = data.shipping;
-      else if (row.key === 'grandTotal') val = data.grandTotal;
-
-      const formattedVal = formatCurrency(val, data.currencySymbol);
-
+    model.totals.rows.forEach(row => {
       totalsParagraphs.push(
         new Paragraph({
           alignment: AlignmentType.RIGHT,
@@ -334,13 +287,13 @@ export class DocxRenderer implements InvoiceRenderer {
               text: `${row.label}: `,
               bold: row.emphasis,
               color: row.emphasis ? primaryColor : textColor,
-              size: template.theme.baseFontSize * 2,
+              size: model.theme.baseFontSize * 2,
             }),
             new TextRun({
-              text: formattedVal,
+              text: row.value,
               bold: row.emphasis,
               color: row.emphasis ? primaryColor : textColor,
-              size: template.theme.baseFontSize * 2,
+              size: model.theme.baseFontSize * 2,
             }),
           ],
         })
@@ -348,9 +301,9 @@ export class DocxRenderer implements InvoiceRenderer {
     });
 
     const notesLines: any[] = [];
-    if (template.notes.show && (data.notes || template.notes.text)) {
-      notesLines.push(new TextRun({ text: (template.notes.heading || 'Notes').toUpperCase(), bold: true, color: primaryColor }));
-      notesLines.push(new TextRun({ text: (data.notes || template.notes.text || ''), color: mutedColor, break: 1 }));
+    if (model.notes.show && model.notes.text) {
+      notesLines.push(new TextRun({ text: model.notes.heading.toUpperCase(), bold: true, color: primaryColor }));
+      notesLines.push(new TextRun({ text: model.notes.text, color: mutedColor, break: 1 }));
     }
 
     const summaryTable = new Table({
@@ -366,7 +319,7 @@ export class DocxRenderer implements InvoiceRenderer {
           children: [
             new TableCell({
               width: { size: 55, type: WidthType.PERCENTAGE },
-              children: [new Paragraph({ children: notesLines })],
+              children: notesLines.length > 0 ? [new Paragraph({ children: notesLines })] : [],
             }),
             new TableCell({
               width: { size: 45, type: WidthType.PERCENTAGE },
@@ -380,152 +333,155 @@ export class DocxRenderer implements InvoiceRenderer {
     documentChildren.push(new Paragraph({ spacing: { after: 200 } }));
 
     // ========================================================
-    // 6. Movable Footer Blocks sequentially
+    // Movable Footer Blocks
     // ========================================================
-    const footerBlocks = template.footerBlocks || [
-      { key: 'payment', label: 'Payment Instructions', visible: template.payment.show, order: 0 },
-      { key: 'bank', label: 'Bank Details', visible: template.bank.show, order: 1 },
-      { key: 'qr', label: 'QR Code', visible: true, order: 2 },
-      { key: 'signature', label: 'Signature', visible: template.signature.show, order: 3 },
-      { key: 'footer', label: 'Footer Declaration', visible: template.footer.show, order: 4 },
-    ];
+    const blocks = model.footerBlocks.filter(b => b.key !== 'footer');
 
-    [...footerBlocks]
-      .sort((a, b) => a.order - b.order)
-      .forEach(block => {
-        if (!block.visible) return;
+    blocks.forEach(block => {
+      if (block.key === 'payment' && block.data.show && block.data.instructions) {
+        documentChildren.push(
+          new Paragraph({
+            spacing: { before: 120, after: 40 },
+            children: [
+              new TextRun({
+                text: block.data.heading.toUpperCase(),
+                bold: true,
+                color: primaryColor,
+                size: model.theme.baseFontSize * 2,
+              })
+            ]
+          })
+        );
+        documentChildren.push(
+          new Paragraph({
+            spacing: { after: 120 },
+            children: [
+              new TextRun({
+                text: block.data.instructions,
+                color: mutedColor,
+                size: model.theme.baseFontSize * 2,
+              })
+            ]
+          })
+        );
+      }
 
-        if (block.key === 'payment' && template.payment.show && template.payment.instructions) {
-          documentChildren.push(
-            new Paragraph({
-              spacing: { before: 120, after: 40 },
-              children: [
-                new TextRun({
-                  text: (template.payment.heading || 'Payment Instructions').toUpperCase(),
-                  bold: true,
-                  color: primaryColor,
-                  size: template.theme.baseFontSize * 2,
-                })
-              ]
-            })
+      if (block.key === 'bank' && block.data.show && block.data.fields && block.data.fields.length > 0) {
+        documentChildren.push(
+          new Paragraph({
+            spacing: { before: 120, after: 40 },
+            children: [
+              new TextRun({
+                text: block.data.heading.toUpperCase(),
+                bold: true,
+                color: primaryColor,
+                size: model.theme.baseFontSize * 2,
+              })
+            ]
+          })
+        );
+
+        const bankFieldsText: any[] = [];
+        block.data.fields.forEach((f: any) => {
+          bankFieldsText.push(
+            new TextRun({ text: `${f.label}: `, bold: true, color: textColor, break: bankFieldsText.length > 0 ? 1 : 0 }),
+            new TextRun({ text: f.value, color: mutedColor })
           );
+        });
+
+        if (bankFieldsText.length > 0) {
           documentChildren.push(
             new Paragraph({
-              spacing: { after: 120 },
-              children: [
-                new TextRun({
-                  text: template.payment.instructions,
-                  color: mutedColor,
-                  size: template.theme.baseFontSize * 2,
-                })
-              ]
+              children: bankFieldsText,
+              spacing: { after: 120 }
             })
           );
         }
+      }
 
-        if (block.key === 'bank' && template.bank.show && data.bank) {
+      if (block.key === 'qr' && block.data.show && block.data.url) {
+        try {
+          const base64Data = block.data.url.replace(/^data:image\/\w+;base64,/, '');
+          const imgBuffer = Buffer.from(base64Data, 'base64');
           documentChildren.push(
             new Paragraph({
-              spacing: { before: 120, after: 40 },
+              spacing: { before: 80, after: 80 },
               children: [
-                new TextRun({
-                  text: template.bank.heading.toUpperCase(),
-                  bold: true,
-                  color: primaryColor,
-                  size: template.theme.baseFontSize * 2,
+                new ImageRun({
+                  data: imgBuffer,
+                  transformation: { width: 75, height: 75 },
+                  type: 'png'
                 })
               ]
             })
           );
+        } catch (err) {
+          console.error('Failed to draw QR in docx:', err);
+        }
+      }
 
-          const bankFieldsText: any[] = [];
-          const sortedBank = [...template.bank.fields].sort((a, b) => a.order - b.order);
-          sortedBank.forEach(f => {
-            if (!f.visible) return;
-            let txt = '';
-            if (f.key === 'bankName') txt = data.bank?.bankName || '';
-            else if (f.key === 'accountHolder') txt = data.bank?.accountHolder || '';
-            else if (f.key === 'accountNumber') txt = data.bank?.accountNumber || '';
-            else if (f.key === 'iban') txt = data.bank?.iban || '';
-            else if (f.key === 'bic') txt = data.bank?.bic || '';
-
-            if (txt) {
-              bankFieldsText.push(
-                new TextRun({ text: `${f.label}: `, bold: true, color: textColor, break: bankFieldsText.length > 0 ? 1 : 0 }),
-                new TextRun({ text: txt, color: mutedColor })
-              );
-            }
-          });
-
-          if (bankFieldsText.length > 0) {
-            documentChildren.push(
-              new Paragraph({
-                children: bankFieldsText,
-                spacing: { after: 120 }
-              })
+      if (block.key === 'signature' && block.data.show) {
+        const sigParagraphChildren: any[] = [];
+        if (block.data.signatureUrl) {
+          try {
+            const base64Data = block.data.signatureUrl.replace(/^data:image\/\w+;base64,/, '');
+            const imgBuffer = Buffer.from(base64Data, 'base64');
+            sigParagraphChildren.push(
+              new ImageRun({
+                data: imgBuffer,
+                transformation: { width: 120, height: 40 },
+                type: 'png'
+              }),
+              new TextRun({ text: "", break: 1 })
             );
+          } catch (err) {
+            console.error('Failed to draw signature image in docx:', err);
           }
         }
 
-        if (block.key === 'qr' && data.qrUrl) {
+        // Draw stamp if enabled
+        if (block.data.showStamp && block.data.stampUrl) {
           try {
-            const base64Data = data.qrUrl.replace(/^data:image\/\w+;base64,/, '');
+            const base64Data = block.data.stampUrl.replace(/^data:image\/\w+;base64,/, '');
             const imgBuffer = Buffer.from(base64Data, 'base64');
+            // Signature and stamp side-by-side or stacked in DOCX. We prepend or append:
             documentChildren.push(
               new Paragraph({
-                spacing: { before: 80, after: 80 },
+                alignment: AlignmentType.RIGHT,
+                spacing: { before: 60, after: 40 },
                 children: [
                   new ImageRun({
                     data: imgBuffer,
-                    transformation: { width: 75, height: 75 },
+                    transformation: { width: 60, height: 60 },
                     type: 'png'
                   })
                 ]
               })
             );
           } catch (err) {
-            console.error('Failed to draw QR in docx:', err);
+            console.error('Failed to draw stamp image in docx:', err);
           }
         }
 
-        if (block.key === 'signature' && template.signature.show) {
-          const sigParagraphChildren: any[] = [];
-          if (data.signatureUrl) {
-            try {
-              const base64Data = data.signatureUrl.replace(/^data:image\/\w+;base64,/, '');
-              const imgBuffer = Buffer.from(base64Data, 'base64');
-              sigParagraphChildren.push(
-                new ImageRun({
-                  data: imgBuffer,
-                  transformation: { width: 120, height: 40 },
-                  type: 'png'
-                }),
-                new TextRun({ text: "", break: 1 })
-              );
-            } catch (err) {
-              console.error('Failed to draw signature image in docx:', err);
-            }
-          }
+        sigParagraphChildren.push(
+          new TextRun({ text: '__________________________', color: mutedColor }),
+          new TextRun({ text: block.data.label, bold: true, color: textColor, break: 1 })
+        );
 
-          sigParagraphChildren.push(
-            new TextRun({ text: '__________________________', color: mutedColor }),
-            new TextRun({ text: template.signature.label, bold: true, color: textColor, break: 1 })
-          );
-
-          documentChildren.push(
-            new Paragraph({
-              alignment: AlignmentType.RIGHT,
-              spacing: { before: 180, after: 120 },
-              children: sigParagraphChildren
-            })
-          );
-        }
-      });
+        documentChildren.push(
+          new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            spacing: { before: 180, after: 120 },
+            children: sigParagraphChildren
+          })
+        );
+      }
+    });
 
     // 8. Footer (radix / docx section footer)
     let docFooter = undefined;
-    const footerBlockConfig = footerBlocks.find(b => b.key === 'footer');
-    if (template.footer.show && footerBlockConfig?.visible) {
+    const footerBlock = model.footerBlocks.find(b => b.key === 'footer');
+    if (footerBlock && footerBlock.data.show) {
       docFooter = {
         default: new Footer({
           children: [
@@ -533,9 +489,9 @@ export class DocxRenderer implements InvoiceRenderer {
               alignment: AlignmentType.CENTER,
               children: [
                 new TextRun({
-                  text: template.footer.text || '',
+                  text: footerBlock.data.text || '',
                   color: mutedColor,
-                  size: (template.theme.baseFontSize - 2) * 2,
+                  size: (model.theme.baseFontSize - 2) * 2,
                 }),
               ],
             }),
@@ -550,8 +506,8 @@ export class DocxRenderer implements InvoiceRenderer {
           properties: {
             page: {
               size: {
-                width: template.page.size === 'LETTER' ? '8.5in' : '21cm',
-                height: template.page.size === 'LETTER' ? '11in' : '29.7cm',
+                width: model.theme.pageSize === 'LETTER' ? '8.5in' : '21cm',
+                height: model.theme.pageSize === 'LETTER' ? '11in' : '29.7cm',
               },
               margin: {
                 top: `${template.page.margins.top}pt`,
