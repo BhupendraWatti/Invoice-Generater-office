@@ -214,20 +214,12 @@
         "order": 2
       },
       {
-        "key": "tax",
-        "label": "Tax Rate",
-        "visible": false,
-        "width": 10,
-        "align": "right",
-        "order": 4
-      },
-      {
-        "key": "amount",
-        "label": "Amount",
+        "key": "col_1784100460226",
+        "label": "New Column",
         "visible": true,
         "width": 15,
-        "align": "right",
-        "order": 5
+        "align": "left",
+        "order": 4
       }
     ],
     "zebra": true,

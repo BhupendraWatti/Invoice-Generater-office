@@ -201,7 +201,7 @@
         "key": "description",
         "label": "Item & Description",
         "visible": true,
-        "width": 45,
+        "width": 41,
         "align": "left",
         "order": 1
       },
@@ -210,7 +210,7 @@
         "label": "Rate",
         "visible": true,
         "width": 15,
-        "align": "right",
+        "align": "center",
         "order": 3
       },
       {
