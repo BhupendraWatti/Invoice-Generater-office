@@ -8,7 +8,7 @@
     "dev:api": "npx pnpm --filter @docflow/api dev",
     "dev:web": "npx pnpm --filter @docflow/web dev",
     "dev": "npx pnpm --filter @docflow/api --filter @docflow/web --parallel dev",
-    "build": "npx pnpm db:generate && npx pnpm -r build && mkdir -p dist",
+    "build": "npx pnpm db:generate && npx pnpm -r build && rm -rf dist .next && cp -r apps/api/dist ./dist && cp -r apps/web/.next ./.next",
     "db:generate": "npx pnpm --filter @docflow/db generate",
     "db:migrate": "npx pnpm --filter @docflow/db migrate:dev",
     "db:seed": "npx pnpm --filter @docflow/db seed"
