@@ -12,14 +12,5 @@
     "db:generate": "pnpm --filter @docflow/db generate",
     "db:migrate": "pnpm --filter @docflow/db migrate:dev",
     "db:seed": "pnpm --filter @docflow/db seed"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@prisma/client",
-      "@prisma/engines",
-      "prisma",
-      "bcrypt",
-      "sharp"
-    ]
   }
 }
