@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "pnpm --filter @docflow/db generate && nest build",
+    "build": "npx prisma generate --schema=../../packages/db/prisma/schema.prisma && nest build",
     "start": "node dist/main.js",
     "dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
