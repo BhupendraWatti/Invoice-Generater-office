@@ -13,8 +13,12 @@ if (appType === 'api') {
     const schemaPath = path.join(__dirname, 'packages/db/prisma/schema.prisma');
     execSync(`npx prisma generate --schema="${schemaPath}"`, { stdio: 'inherit' });
     console.log('[Startup Router] Prisma Client generated successfully!');
+    
+    console.log('[Startup Router] Applying database migrations...');
+    execSync(`npx prisma migrate deploy --schema="${schemaPath}"`, { stdio: 'inherit' });
+    console.log('[Startup Router] Database migrations applied successfully!');
   } catch (error) {
-    console.error('[Startup Router] Prisma Client generation failed:', error);
+    console.error('[Startup Router] Prisma Client generation or migration failed:', error);
     process.exit(1);
   }
   args = ['dist/main.js'];
