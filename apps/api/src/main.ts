@@ -104,6 +104,7 @@ async function bootstrap() {
       console.log('[Prisma Bootstrap] Database migrations applied successfully.');
       
       // One-time Database Seeding
+      const publicHtmlDir = path.join(__dirname, '../../../../public_html');
       const seededFlagPath = path.join(publicHtmlDir, 'seeded.txt');
       if (!fs.existsSync(seededFlagPath)) {
         try {
