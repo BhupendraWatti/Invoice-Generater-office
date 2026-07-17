@@ -132,39 +132,30 @@ function copyLogs() {
           // ignore
         }
 
-        // Diagnostic: Find .next directory inside latest frontend build
+        // Diagnostic: List backend builds repository directory structure
         try {
-          const apisalesBuildsDir = '/home/u163598660/domains/apisales.granthinfotech.in/public_html/.builds';
-          if (fs.existsSync(apisalesBuildsDir)) {
-            const findDirs = (dir: string, depth = 0): string[] => {
-              if (depth > 6) return [];
-              let results: string[] = [];
+          const lines: string[] = [];
+          const checkPath = (p: string) => {
+            lines.push(`\n=== Checking: ${p} ===`);
+            if (fs.existsSync(p)) {
               try {
-                const list = fs.readdirSync(dir);
-                list.forEach(file => {
-                  const fullPath = path.join(dir, file);
-                  // Ignore node_modules to speed up scan
-                  if (file === 'node_modules') return;
-                  
-                  try {
-                    if (fs.statSync(fullPath).isDirectory()) {
-                      if (file === '.next') {
-                        results.push(fullPath);
-                      } else {
-                        results = results.concat(findDirs(fullPath, depth + 1));
-                      }
-                    }
-                  } catch (statErr) {
-                    // Ignore stat errors for broken symlinks
-                  }
-                });
-              } catch (e) {}
-              return results;
-            };
-            
-            const nextDirsFound = findDirs(apisalesBuildsDir);
-            fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-next-dirs-found.txt'), nextDirsFound.join('\n'));
-          }
+                const contents = fs.readdirSync(p);
+                lines.push(contents.join('\n'));
+              } catch (e) {
+                lines.push(`Error reading: ${e.message}`);
+              }
+            } else {
+              lines.push('Does not exist');
+            }
+          };
+
+          checkPath('/home/u163598660/domains/apisales.granthinfotech.in/public_html/.builds');
+          checkPath('/home/u163598660/domains/apisales.granthinfotech.in/public_html/.builds/source');
+          checkPath('/home/u163598660/domains/apisales.granthinfotech.in/public_html/.builds/source/repository');
+          checkPath('/home/u163598660/domains/apisales.granthinfotech.in/public_html/.builds/source/repository/apps');
+          checkPath('/home/u163598660/domains/apisales.granthinfotech.in/public_html/.builds/source/repository/apps/web');
+
+          fs.writeFileSync(path.join(publicHtmlDir, 'copied-builds-dir-contents.txt'), lines.join('\n'));
         } catch (err) {
           // ignore
         }
