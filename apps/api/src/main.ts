@@ -54,10 +54,17 @@ function copyLogs() {
             cwd: frontendNodejsDir,
             encoding: 'utf8'
           });
-          fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-git.log'), gitLog);
-          console.log('[Diagnostic] Frontend git pulled successfully.');
+          
+          console.log('[Diagnostic] Rebuilding frontend Next.js app...');
+          const buildLog = execSync('pnpm --filter @docflow/web build', {
+            cwd: frontendNodejsDir,
+            encoding: 'utf8'
+          });
+          
+          fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-git.log'), `${gitLog}\n\nBuild Log:\n${buildLog}`);
+          console.log('[Diagnostic] Frontend git pulled and rebuilt successfully.');
         } catch (gitErr) {
-          fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-git.log'), `Git pull failed:\n${gitErr.message}\n${gitErr.stderr || ''}`);
+          fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-git.log'), `Git pull/build failed:\n${gitErr.message}\n${gitErr.stderr || ''}`);
         }
       }
     }
