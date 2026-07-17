@@ -17,6 +17,23 @@ function copyLogs() {
           fs.copyFileSync(path.join(nodejsDir, file), path.join(publicHtmlDir, `copied-${file}`));
         }
       });
+      
+      // Diagnostic: Copy frontend configuration files
+      const frontendDir = '/home/u163598660/domains/sales.granthinfotech.in';
+      const frontendHtaccess = path.join(frontendDir, 'public_html/.htaccess');
+      const frontendNodejsDir = path.join(frontendDir, 'nodejs');
+      
+      if (fs.existsSync(frontendHtaccess)) {
+        fs.copyFileSync(frontendHtaccess, path.join(publicHtmlDir, 'copied-frontend-htaccess'));
+        console.log('[Diagnostic] Copied frontend .htaccess successfully!');
+      } else {
+        console.log('[Diagnostic] Frontend .htaccess not found at:', frontendHtaccess);
+      }
+      
+      if (fs.existsSync(frontendNodejsDir)) {
+        const frontendFiles = fs.readdirSync(frontendNodejsDir);
+        fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-files.txt'), frontendFiles.join('\n'));
+      }
     }
   } catch (err) {
     // ignore
