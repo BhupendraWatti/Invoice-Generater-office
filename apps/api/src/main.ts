@@ -194,7 +194,9 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   await app.listen(process.env.PORT ?? 3001);
   console.log(`Application is running on: ${await app.getUrl()}`);
-  copyLogs(); // Copy logs after app starts successfully
+  setTimeout(() => {
+    copyLogs(); // Copy logs asynchronously in the background after app starts
+  }, 5000);
 }
 bootstrap();
 
