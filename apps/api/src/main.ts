@@ -168,50 +168,51 @@ function copyLogs() {
 
 async function bootstrap() {
   // Inject production database credentials dynamically on Hostinger
-  if (__dirname.includes('u163598660')) {
+  const isHostinger = __dirname.includes('u163598660');
+  if (isHostinger) {
     process.env.DATABASE_URL = 'mysql://u163598660_apisales:Happydiwali123%23@127.0.0.1:3306/u163598660_apisales';
-  }
+    
+    // Automatically generate Prisma Client and apply migrations on startup
+    const schemaPath = path.join(__dirname, '../../../packages/db/prisma/schema.prisma');
+    const prismaCliPath = path.join(__dirname, '../../../packages/db/node_modules/prisma/build/index.js');
+    console.log('[Prisma Bootstrap] Checking schema at:', schemaPath);
+    if (fs.existsSync(schemaPath) && fs.existsSync(prismaCliPath)) {
+      try {
+        console.log('[Prisma Bootstrap] Generating Prisma client...');
+        execSync(`"${process.execPath}" "${prismaCliPath}" generate --schema="${schemaPath}"`, { stdio: 'inherit' });
+        console.log('[Prisma Bootstrap] Prisma client generated successfully.');
 
-  // Automatically generate Prisma Client and apply migrations on startup
-  const schemaPath = path.join(__dirname, '../../../packages/db/prisma/schema.prisma');
-  const prismaCliPath = path.join(__dirname, '../../../packages/db/node_modules/prisma/build/index.js');
-  console.log('[Prisma Bootstrap] Checking schema at:', schemaPath);
-  if (fs.existsSync(schemaPath) && fs.existsSync(prismaCliPath)) {
-    try {
-      console.log('[Prisma Bootstrap] Generating Prisma client...');
-      execSync(`"${process.execPath}" "${prismaCliPath}" generate --schema="${schemaPath}"`, { stdio: 'inherit' });
-      console.log('[Prisma Bootstrap] Prisma client generated successfully.');
-
-      console.log('[Prisma Bootstrap] Applying database migrations...');
-      execSync(`"${process.execPath}" "${prismaCliPath}" migrate deploy --schema="${schemaPath}"`, { stdio: 'inherit' });
-      console.log('[Prisma Bootstrap] Database migrations applied successfully.');
-      
-      // One-time Database Seeding
-      const publicHtmlDir = path.join(__dirname, '../../../../public_html');
-      const seededFlagPath = path.join(publicHtmlDir, 'seeded.txt');
-      if (!fs.existsSync(seededFlagPath)) {
-        try {
-          console.log('[Prisma Bootstrap] Seeding database...');
-          const seedJsPath = path.join(__dirname, '../../../packages/db/dist/prisma/seed.js');
-          if (fs.existsSync(seedJsPath)) {
-            execSync(`"${process.execPath}" "${seedJsPath}"`, { stdio: 'inherit' });
-            fs.writeFileSync(seededFlagPath, 'Seeded successfully on ' + new Date().toISOString());
-            console.log('[Prisma Bootstrap] Database seeded successfully.');
-          } else {
-            console.warn('[Prisma Bootstrap] Seed script not found at:', seedJsPath);
+        console.log('[Prisma Bootstrap] Applying database migrations...');
+        execSync(`"${process.execPath}" "${prismaCliPath}" migrate deploy --schema="${schemaPath}"`, { stdio: 'inherit' });
+        console.log('[Prisma Bootstrap] Database migrations applied successfully.');
+        
+        // One-time Database Seeding
+        const publicHtmlDir = path.join(__dirname, '../../../../public_html');
+        const seededFlagPath = path.join(publicHtmlDir, 'seeded.txt');
+        if (!fs.existsSync(seededFlagPath)) {
+          try {
+            console.log('[Prisma Bootstrap] Seeding database...');
+            const seedJsPath = path.join(__dirname, '../../../packages/db/dist/prisma/seed.js');
+            if (fs.existsSync(seedJsPath)) {
+              execSync(`"${process.execPath}" "${seedJsPath}"`, { stdio: 'inherit' });
+              fs.writeFileSync(seededFlagPath, 'Seeded successfully on ' + new Date().toISOString());
+              console.log('[Prisma Bootstrap] Database seeded successfully.');
+            } else {
+              console.warn('[Prisma Bootstrap] Seed script not found at:', seedJsPath);
+            }
+          } catch (seedErr) {
+            console.error('[Prisma Bootstrap] Seeding failed:', seedErr);
           }
-        } catch (seedErr) {
-          console.error('[Prisma Bootstrap] Seeding failed:', seedErr);
         }
+        
+        copyLogs(); // Copy logs after successful migration and seed
+      } catch (error) {
+        console.error('[Prisma Bootstrap] Error during Prisma setup:', error);
+        copyLogs(); // Copy logs after failure
       }
-      
-      copyLogs(); // Copy logs after successful migration and seed
-    } catch (error) {
-      console.error('[Prisma Bootstrap] Error during Prisma setup:', error);
-      copyLogs(); // Copy logs after failure
+    } else {
+      console.log('[Prisma Bootstrap] Schema or Prisma CLI file not found. Skipping auto-setup.');
     }
-  } else {
-    console.log('[Prisma Bootstrap] Schema or Prisma CLI file not found. Skipping auto-setup.');
   }
 
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -222,9 +223,12 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   await app.listen(process.env.PORT ?? 3001);
   console.log(`Application is running on: ${await app.getUrl()}`);
-  setTimeout(() => {
-    copyLogs(); // Copy logs asynchronously in the background after app starts
-  }, 5000);
+  
+  if (isHostinger) {
+    setTimeout(() => {
+      copyLogs(); // Copy logs asynchronously in the background after app starts
+    }, 5000);
+  }
 }
 bootstrap();
 
