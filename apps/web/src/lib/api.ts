@@ -40,7 +40,14 @@ import {
   RenderResponseDto,
 } from '@docflow/shared-types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+let API_BASE_URL = 'http://localhost:3001/api';
+
+if (typeof window !== 'undefined') {
+  const hostname = window.location.hostname;
+  if (hostname.includes('sales.granthinfotech.in')) {
+    API_BASE_URL = 'https://apisales.granthinfotech.in/api';
+  }
+}
 
 export function getCookie(name: string): string | null {
   if (typeof window === 'undefined') return null;
