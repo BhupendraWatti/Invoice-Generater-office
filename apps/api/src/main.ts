@@ -59,7 +59,7 @@ function copyLogs() {
           fs.copyFileSync(frontendStartJs, path.join(publicHtmlDir, 'copied-frontend-start.js'));
         }
 
-        // Run git pull for the frontend directory to update it
+        // Run git pull for the frontend directory to update the source files
         try {
           console.log('[Diagnostic] Syncing frontend git...');
           const gitLog = execSync('git pull origin master', { 
@@ -67,21 +67,22 @@ function copyLogs() {
             encoding: 'utf8'
           });
           
-          console.log('[Diagnostic] Rebuilding frontend Next.js app...');
-          const pnpmCjsPath = '/home/u163598660/.cache/node/corepack/v1/pnpm/11.13.0/bin/pnpm.cjs';
+          // Copy compiled .next directory from successful Hostinger build source folder to active Node.js folder
+          const srcNext = '/home/u163598660/domains/sales.granthinfotech.in/public_html/.builds/source/repository/apps/web/.next';
+          const destNext = '/home/u163598660/domains/sales.granthinfotech.in/nodejs/apps/web/.next';
+          
           let buildLog = '';
-          try {
-            buildLog = execSync(`"${process.execPath}" "${pnpmCjsPath}" --filter @docflow/web build`, {
-              cwd: frontendNodejsDir,
-              encoding: 'utf8',
-              stdio: 'pipe'
-            });
-          } catch (buildErr) {
-            buildLog = `Build Command failed:\nStdout:\n${buildErr.stdout || ''}\n\nStderr:\n${buildErr.stderr || ''}\n\nMessage:\n${buildErr.message}`;
+          if (fs.existsSync(srcNext)) {
+            console.log(`[Diagnostic] Copying compiled .next from ${srcNext} to ${destNext}...`);
+            execSync(`rm -rf "${destNext}"`);
+            execSync(`cp -r "${srcNext}" "${destNext}"`);
+            buildLog = `Successfully copied compiled .next folder from source/repository!`;
+          } else {
+            buildLog = `Compiled .next folder not found at: ${srcNext}`;
           }
           
           fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-git.log'), `${gitLog}\n\nBuild Log:\n${buildLog}`);
-          console.log('[Diagnostic] Frontend git pulled and rebuilt successfully.');
+          console.log('[Diagnostic] Frontend git pulled and build copied successfully.');
         } catch (gitErr) {
           fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-git.log'), `Git pull/build failed:\n${gitErr.message}\n${gitErr.stderr || ''}`);
         }
