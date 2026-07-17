@@ -235,6 +235,5 @@ async function bootstrap() {
     }, 5000);
   }
 }
-}
 bootstrap();
 
