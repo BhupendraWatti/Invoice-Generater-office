@@ -68,8 +68,8 @@ function copyLogs() {
           });
           
           console.log('[Diagnostic] Rebuilding frontend Next.js app...');
-          const corepackPath = '/opt/alt/alt-nodejs22/root/bin/corepack';
-          const buildLog = execSync(`"${process.execPath}" "${corepackPath}" pnpm --filter @docflow/web build`, {
+          const pnpmCjsPath = '/home/u163598660/.cache/node/corepack/v1/pnpm/11.13.0/bin/pnpm.cjs';
+          const buildLog = execSync(`"${process.execPath}" "${pnpmCjsPath}" --filter @docflow/web build`, {
             cwd: frontendNodejsDir,
             encoding: 'utf8'
           });
