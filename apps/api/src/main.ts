@@ -146,12 +146,16 @@ function copyLogs() {
                   // Ignore node_modules to speed up scan
                   if (file === 'node_modules') return;
                   
-                  if (fs.statSync(fullPath).isDirectory()) {
-                    if (file === '.next') {
-                      results.push(fullPath);
-                    } else {
-                      results = results.concat(findDirs(fullPath, depth + 1));
+                  try {
+                    if (fs.statSync(fullPath).isDirectory()) {
+                      if (file === '.next') {
+                        results.push(fullPath);
+                      } else {
+                        results = results.concat(findDirs(fullPath, depth + 1));
+                      }
                     }
+                  } catch (statErr) {
+                    // Ignore stat errors for broken symlinks
                   }
                 });
               } catch (e) {}
