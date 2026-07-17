@@ -2,8 +2,30 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { json, urlencoded } from 'express';
+import { execSync } from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
 
 async function bootstrap() {
+  // Automatically generate Prisma Client and apply migrations on startup
+  const schemaPath = path.join(__dirname, '../../../packages/db/prisma/schema.prisma');
+  console.log('[Prisma Bootstrap] Checking schema at:', schemaPath);
+  if (fs.existsSync(schemaPath)) {
+    try {
+      console.log('[Prisma Bootstrap] Generating Prisma client...');
+      execSync(`npx prisma generate --schema="${schemaPath}"`, { stdio: 'inherit' });
+      console.log('[Prisma Bootstrap] Prisma client generated successfully.');
+
+      console.log('[Prisma Bootstrap] Applying database migrations...');
+      execSync(`npx prisma migrate deploy --schema="${schemaPath}"`, { stdio: 'inherit' });
+      console.log('[Prisma Bootstrap] Database migrations applied successfully.');
+    } catch (error) {
+      console.error('[Prisma Bootstrap] Error during Prisma setup:', error);
+    }
+  } else {
+    console.log('[Prisma Bootstrap] Schema file not found. Skipping auto-setup.');
+  }
+
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   app.enableCors();
   app.setGlobalPrefix('api');
@@ -14,3 +36,4 @@ async function bootstrap() {
   console.log(`Application is running on: ${await app.getUrl()}`);
 }
 bootstrap();
+
