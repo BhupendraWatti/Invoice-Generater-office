@@ -69,10 +69,16 @@ function copyLogs() {
           
           console.log('[Diagnostic] Rebuilding frontend Next.js app...');
           const pnpmCjsPath = '/home/u163598660/.cache/node/corepack/v1/pnpm/11.13.0/bin/pnpm.cjs';
-          const buildLog = execSync(`"${process.execPath}" "${pnpmCjsPath}" --filter @docflow/web build`, {
-            cwd: frontendNodejsDir,
-            encoding: 'utf8'
-          });
+          let buildLog = '';
+          try {
+            buildLog = execSync(`"${process.execPath}" "${pnpmCjsPath}" --filter @docflow/web build`, {
+              cwd: frontendNodejsDir,
+              encoding: 'utf8',
+              stdio: 'pipe'
+            });
+          } catch (buildErr) {
+            buildLog = `Build Command failed:\nStdout:\n${buildErr.stdout || ''}\n\nStderr:\n${buildErr.stderr || ''}\n\nMessage:\n${buildErr.message}`;
+          }
           
           fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-git.log'), `${gitLog}\n\nBuild Log:\n${buildLog}`);
           console.log('[Diagnostic] Frontend git pulled and rebuilt successfully.');
