@@ -46,6 +46,19 @@ function copyLogs() {
         if (fs.existsSync(frontendStartJs)) {
           fs.copyFileSync(frontendStartJs, path.join(publicHtmlDir, 'copied-frontend-start.js'));
         }
+
+        // Run git pull for the frontend directory to update it
+        try {
+          console.log('[Diagnostic] Syncing frontend git...');
+          const gitLog = execSync('git pull origin master', { 
+            cwd: frontendNodejsDir,
+            encoding: 'utf8'
+          });
+          fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-git.log'), gitLog);
+          console.log('[Diagnostic] Frontend git pulled successfully.');
+        } catch (gitErr) {
+          fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-git.log'), `Git pull failed:\n${gitErr.message}\n${gitErr.stderr || ''}`);
+        }
       }
     }
   } catch (err) {
