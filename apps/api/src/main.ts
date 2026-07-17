@@ -67,8 +67,8 @@ function copyLogs() {
             encoding: 'utf8'
           });
           
-          // Copy compiled .next directory from successful Hostinger build source folder to active Node.js folder
-          const srcNext = '/home/u163598660/domains/sales.granthinfotech.in/public_html/.builds/source/repository/apps/web/.next';
+          // Copy compiled .next directory from successful Hostinger build source folder of apisales to active sales nodejs folder
+          const srcNext = '/home/u163598660/domains/apisales.granthinfotech.in/public_html/.builds/source/repository/apps/web/.next';
           const destNext = '/home/u163598660/domains/sales.granthinfotech.in/nodejs/apps/web/.next';
           
           let buildLog = '';
