@@ -173,8 +173,8 @@ async function bootstrap() {
     process.env.DATABASE_URL = 'mysql://u163598660_apisales:Happydiwali123%23@127.0.0.1:3306/u163598660_apisales';
     
     // Automatically generate Prisma Client and apply migrations on startup
-    const schemaPath = path.join(__dirname, '../../../packages/db/prisma/schema.prisma');
-    const prismaCliPath = path.join(__dirname, '../../../packages/db/node_modules/prisma/build/index.js');
+    const schemaPath = '/home/u163598660/domains/apisales.granthinfotech.in/nodejs/packages/db/prisma/schema.prisma';
+    const prismaCliPath = '/home/u163598660/domains/apisales.granthinfotech.in/nodejs/node_modules/prisma/build/index.js';
     console.log('[Prisma Bootstrap] Checking schema at:', schemaPath);
     if (fs.existsSync(schemaPath) && fs.existsSync(prismaCliPath)) {
       try {
@@ -192,7 +192,7 @@ async function bootstrap() {
         if (!fs.existsSync(seededFlagPath)) {
           try {
             console.log('[Prisma Bootstrap] Seeding database...');
-            const seedJsPath = path.join(__dirname, '../../../packages/db/dist/prisma/seed.js');
+            const seedJsPath = '/home/u163598660/domains/apisales.granthinfotech.in/nodejs/packages/db/dist/prisma/seed.js';
             if (fs.existsSync(seedJsPath)) {
               execSync(`"${process.execPath}" "${seedJsPath}"`, { stdio: 'inherit' });
               fs.writeFileSync(seededFlagPath, 'Seeded successfully on ' + new Date().toISOString());
