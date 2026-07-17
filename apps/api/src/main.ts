@@ -33,6 +33,15 @@ function copyLogs() {
       if (fs.existsSync(frontendNodejsDir)) {
         const frontendFiles = fs.readdirSync(frontendNodejsDir);
         fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-files.txt'), frontendFiles.join('\n'));
+        
+        const frontendStderr = path.join(frontendNodejsDir, 'stderr.log');
+        const frontendConsole = path.join(frontendNodejsDir, 'console.log');
+        if (fs.existsSync(frontendStderr)) {
+          fs.copyFileSync(frontendStderr, path.join(publicHtmlDir, 'copied-frontend-stderr.log'));
+        }
+        if (fs.existsSync(frontendConsole)) {
+          fs.copyFileSync(frontendConsole, path.join(publicHtmlDir, 'copied-frontend-console.log'));
+        }
       }
     }
   } catch (err) {
