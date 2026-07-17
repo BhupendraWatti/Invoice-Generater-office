@@ -188,6 +188,28 @@ async function bootstrap() {
       try {
         fs.writeFileSync(migrationLogPath, `[Migration] Started at ${new Date().toISOString()}\n`);
         
+        // List files in the root folder for debugging
+        try {
+          const rootFiles = fs.readdirSync('/home/u163598660/domains/apisales.granthinfotech.in/nodejs');
+          fs.appendFileSync(migrationLogPath, `Root files: ${rootFiles.join(', ')}\n`);
+          
+          const pkgExists = fs.existsSync('/home/u163598660/domains/apisales.granthinfotech.in/nodejs/packages');
+          fs.appendFileSync(migrationLogPath, `packages folder exists: ${pkgExists}\n`);
+          if (pkgExists) {
+            const pkgFiles = fs.readdirSync('/home/u163598660/domains/apisales.granthinfotech.in/nodejs/packages');
+            fs.appendFileSync(migrationLogPath, `packages files: ${pkgFiles.join(', ')}\n`);
+            
+            const dbExists = fs.existsSync('/home/u163598660/domains/apisales.granthinfotech.in/nodejs/packages/db');
+            fs.appendFileSync(migrationLogPath, `packages/db folder exists: ${dbExists}\n`);
+            if (dbExists) {
+              const dbFiles = fs.readdirSync('/home/u163598660/domains/apisales.granthinfotech.in/nodejs/packages/db');
+              fs.appendFileSync(migrationLogPath, `packages/db files: ${dbFiles.join(', ')}\n`);
+            }
+          }
+        } catch (err) {
+          fs.appendFileSync(migrationLogPath, `Failed to list files: ${err.message}\n`);
+        }
+        
         // Automatically generate Prisma Client and apply migrations on startup
         const schemaPath = '/home/u163598660/domains/apisales.granthinfotech.in/nodejs/packages/db/prisma/schema.prisma';
         const prismaCliPath = '/home/u163598660/domains/apisales.granthinfotech.in/nodejs/node_modules/prisma/build/index.js';
