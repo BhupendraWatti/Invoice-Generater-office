@@ -131,6 +131,45 @@ function copyLogs() {
         } catch (err) {
           // ignore
         }
+
+        // Diagnostic: Find .next directory inside latest frontend build
+        try {
+          const frontendBuildsLogsDir = '/home/u163598660/domains/sales.granthinfotech.in/public_html/.builds/logs';
+          if (fs.existsSync(frontendBuildsLogsDir)) {
+            const buildDirs = fs.readdirSync(frontendBuildsLogsDir);
+            if (buildDirs.length > 0) {
+              const latestBuildName = buildDirs.sort().pop();
+              if (latestBuildName) {
+                const latestBuildPath = path.join(frontendBuildsLogsDir, latestBuildName);
+                
+                // Helper function to recursively find .next directories
+                const findDirs = (dir: string, depth = 0): string[] => {
+                  if (depth > 5) return [];
+                  let results: string[] = [];
+                  try {
+                    const list = fs.readdirSync(dir);
+                    list.forEach(file => {
+                      const fullPath = path.join(dir, file);
+                      if (fs.statSync(fullPath).isDirectory()) {
+                        if (file === '.next') {
+                          results.push(fullPath);
+                        } else {
+                          results = results.concat(findDirs(fullPath, depth + 1));
+                        }
+                      }
+                    });
+                  } catch (e) {}
+                  return results;
+                };
+                
+                const nextDirsFound = findDirs(latestBuildPath);
+                fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-next-dirs-found.txt'), nextDirsFound.join('\n'));
+              }
+            }
+          }
+        } catch (err) {
+          // ignore
+        }
       }
     }
   } catch (err) {
