@@ -76,6 +76,30 @@ function copyLogs() {
         } catch (err) {
           // ignore
         }
+
+        // Diagnostic: Copy frontend build logs if they exist
+        try {
+          const frontendBuildsDir = '/home/u163598660/domains/sales.granthinfotech.in/public_html/.builds/logs';
+          if (fs.existsSync(frontendBuildsDir)) {
+            const buildDirs = fs.readdirSync(frontendBuildsDir);
+            fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-builds-list.txt'), buildDirs.join('\n'));
+            
+            // Look for the latest build directory and copy its log
+            if (buildDirs.length > 0) {
+              const latestBuildDirName = buildDirs.sort().pop();
+              if (latestBuildDirName) {
+                const latestBuildPath = path.join(frontendBuildsDir, latestBuildDirName);
+                const logFiles = fs.readdirSync(latestBuildPath);
+                const logFile = logFiles.find(f => f.endsWith('.log'));
+                if (logFile) {
+                  fs.copyFileSync(path.join(latestBuildPath, logFile), path.join(publicHtmlDir, 'copied-frontend-build-failed.log'));
+                }
+              }
+            }
+          }
+        } catch (err) {
+          // ignore
+        }
       }
     }
   } catch (err) {
