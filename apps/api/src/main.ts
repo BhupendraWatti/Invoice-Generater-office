@@ -115,7 +115,7 @@ function copyLogs() {
 
         // Diagnostic: List nodejs22 bin files
         try {
-          const node22BinDir = '/opt/alt/alt-nodejs22/root/usr/bin';
+          const node22BinDir = '/opt/alt/alt-nodejs22/root/bin';
           if (fs.existsSync(node22BinDir)) {
             const binFiles = fs.readdirSync(node22BinDir);
             fs.writeFileSync(path.join(publicHtmlDir, 'copied-nodejs22-bin.txt'), binFiles.join('\n'));
