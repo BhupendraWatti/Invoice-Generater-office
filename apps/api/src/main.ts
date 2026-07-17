@@ -6,13 +6,7 @@ import { execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
-async function bootstrap() {
-  // Inject production database credentials dynamically on Hostinger
-  if (__dirname.includes('u163598660')) {
-    process.env.DATABASE_URL = 'mysql://u163598660_apisales:Happydiwali123%23@127.0.0.1:3306/u163598660_apisales';
-  }
-
-  // Diagnostic: Copy logs from nodejs root to public_html for FTP access
+function copyLogs() {
   try {
     const nodejsDir = path.join(__dirname, '../../../');
     const publicHtmlDir = path.join(__dirname, '../../../../public_html');
@@ -25,7 +19,14 @@ async function bootstrap() {
       });
     }
   } catch (err) {
-    console.error('[Diagnostic] Log copy failed:', err);
+    // ignore
+  }
+}
+
+async function bootstrap() {
+  // Inject production database credentials dynamically on Hostinger
+  if (__dirname.includes('u163598660')) {
+    process.env.DATABASE_URL = 'mysql://u163598660_apisales:Happydiwali123%23@127.0.0.1:3306/u163598660_apisales';
   }
 
   // Automatically generate Prisma Client and apply migrations on startup
@@ -41,8 +42,10 @@ async function bootstrap() {
       console.log('[Prisma Bootstrap] Applying database migrations...');
       execSync(`"${process.execPath}" "${prismaCliPath}" migrate deploy --schema="${schemaPath}"`, { stdio: 'inherit' });
       console.log('[Prisma Bootstrap] Database migrations applied successfully.');
+      copyLogs(); // Copy logs after successful migration
     } catch (error) {
       console.error('[Prisma Bootstrap] Error during Prisma setup:', error);
+      copyLogs(); // Copy logs after failure
     }
   } else {
     console.log('[Prisma Bootstrap] Schema or Prisma CLI file not found. Skipping auto-setup.');
@@ -56,6 +59,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   await app.listen(process.env.PORT ?? 3001);
   console.log(`Application is running on: ${await app.getUrl()}`);
+  copyLogs(); // Copy logs after app starts successfully
 }
 bootstrap();
 
