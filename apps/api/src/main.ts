@@ -85,7 +85,26 @@ async function bootstrap() {
       console.log('[Prisma Bootstrap] Applying database migrations...');
       execSync(`"${process.execPath}" "${prismaCliPath}" migrate deploy --schema="${schemaPath}"`, { stdio: 'inherit' });
       console.log('[Prisma Bootstrap] Database migrations applied successfully.');
-      copyLogs(); // Copy logs after successful migration
+      
+      // One-time Database Seeding
+      const seededFlagPath = path.join(publicHtmlDir, 'seeded.txt');
+      if (!fs.existsSync(seededFlagPath)) {
+        try {
+          console.log('[Prisma Bootstrap] Seeding database...');
+          const seedJsPath = path.join(__dirname, '../../../packages/db/dist/prisma/seed.js');
+          if (fs.existsSync(seedJsPath)) {
+            execSync(`"${process.execPath}" "${seedJsPath}"`, { stdio: 'inherit' });
+            fs.writeFileSync(seededFlagPath, 'Seeded successfully on ' + new Date().toISOString());
+            console.log('[Prisma Bootstrap] Database seeded successfully.');
+          } else {
+            console.warn('[Prisma Bootstrap] Seed script not found at:', seedJsPath);
+          }
+        } catch (seedErr) {
+          console.error('[Prisma Bootstrap] Seeding failed:', seedErr);
+        }
+      }
+      
+      copyLogs(); // Copy logs after successful migration and seed
     } catch (error) {
       console.error('[Prisma Bootstrap] Error during Prisma setup:', error);
       copyLogs(); // Copy logs after failure
