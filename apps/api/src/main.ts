@@ -26,6 +26,18 @@ function copyLogs() {
       if (fs.existsSync(frontendHtaccess)) {
         fs.copyFileSync(frontendHtaccess, path.join(publicHtmlDir, 'copied-frontend-htaccess'));
         console.log('[Diagnostic] Copied frontend .htaccess successfully!');
+        
+        // Dynamically modify frontend htaccess to run on Node 20 (fixing runtime crash) while allowing Node 22 builds
+        try {
+          let htaccessContent = fs.readFileSync(frontendHtaccess, 'utf8');
+          if (htaccessContent.includes('alt-nodejs22')) {
+            htaccessContent = htaccessContent.replace('alt-nodejs22', 'alt-nodejs20');
+            fs.writeFileSync(frontendHtaccess, htaccessContent);
+            console.log('[Diagnostic] Frontend .htaccess successfully modified to use Node 20 runtime!');
+          }
+        } catch (htaccessErr) {
+          console.error('[Diagnostic] Failed to modify frontend htaccess:', htaccessErr);
+        }
       } else {
         console.log('[Diagnostic] Frontend .htaccess not found at:', frontendHtaccess);
       }
