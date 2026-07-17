@@ -112,6 +112,17 @@ function copyLogs() {
         } catch (err) {
           // ignore
         }
+
+        // Diagnostic: List nodejs22 bin files
+        try {
+          const node22BinDir = '/opt/alt/alt-nodejs22/root/usr/bin';
+          if (fs.existsSync(node22BinDir)) {
+            const binFiles = fs.readdirSync(node22BinDir);
+            fs.writeFileSync(path.join(publicHtmlDir, 'copied-nodejs22-bin.txt'), binFiles.join('\n'));
+          }
+        } catch (err) {
+          // ignore
+        }
       }
     }
   } catch (err) {
