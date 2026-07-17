@@ -36,11 +36,15 @@ function copyLogs() {
         
         const frontendStderr = path.join(frontendNodejsDir, 'stderr.log');
         const frontendConsole = path.join(frontendNodejsDir, 'console.log');
+        const frontendStartJs = path.join(frontendNodejsDir, 'start.js');
         if (fs.existsSync(frontendStderr)) {
           fs.copyFileSync(frontendStderr, path.join(publicHtmlDir, 'copied-frontend-stderr.log'));
         }
         if (fs.existsSync(frontendConsole)) {
           fs.copyFileSync(frontendConsole, path.join(publicHtmlDir, 'copied-frontend-console.log'));
+        }
+        if (fs.existsSync(frontendStartJs)) {
+          fs.copyFileSync(frontendStartJs, path.join(publicHtmlDir, 'copied-frontend-start.js'));
         }
       }
     }
