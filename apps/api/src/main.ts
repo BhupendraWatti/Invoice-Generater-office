@@ -7,6 +7,11 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 async function bootstrap() {
+  // Inject production database credentials dynamically on Hostinger
+  if (__dirname.includes('u163598660')) {
+    process.env.DATABASE_URL = 'mysql://u163598660_apisales:Happydiwali123%23@localhost:3306/u163598660_apisales';
+  }
+
   // Diagnostic: Copy logs from nodejs root to public_html for FTP access
   try {
     const nodejsDir = path.join(__dirname, '../../../');
