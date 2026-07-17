@@ -7,6 +7,22 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 async function bootstrap() {
+  // Diagnostic: Copy logs from nodejs root to public_html for FTP access
+  try {
+    const nodejsDir = path.join(__dirname, '../../../');
+    const publicHtmlDir = path.join(__dirname, '../../../../public_html');
+    if (fs.existsSync(nodejsDir) && fs.existsSync(publicHtmlDir)) {
+      const files = fs.readdirSync(nodejsDir);
+      files.forEach(file => {
+        if (file.endsWith('.log') || file.includes('log') || file.includes('err')) {
+          fs.copyFileSync(path.join(nodejsDir, file), path.join(publicHtmlDir, `copied-${file}`));
+        }
+      });
+    }
+  } catch (err) {
+    console.error('[Diagnostic] Log copy failed:', err);
+  }
+
   // Automatically generate Prisma Client and apply migrations on startup
   const schemaPath = path.join(__dirname, '../../../packages/db/prisma/schema.prisma');
   console.log('[Prisma Bootstrap] Checking schema at:', schemaPath);
