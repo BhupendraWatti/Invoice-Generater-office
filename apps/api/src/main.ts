@@ -66,6 +66,16 @@ function copyLogs() {
         } catch (gitErr) {
           fs.writeFileSync(path.join(publicHtmlDir, 'copied-frontend-git.log'), `Git pull/build failed:\n${gitErr.message}\n${gitErr.stderr || ''}`);
         }
+
+        // Diagnostic: List alt nodejs versions
+        try {
+          if (fs.existsSync('/opt/alt')) {
+            const versions = fs.readdirSync('/opt/alt');
+            fs.writeFileSync(path.join(publicHtmlDir, 'copied-alt-versions.txt'), versions.join('\n'));
+          }
+        } catch (err) {
+          // ignore
+        }
       }
     }
   } catch (err) {
